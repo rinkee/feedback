@@ -93,6 +93,21 @@ interface RatingDistribution {
   percentage: number;
 }
 
+// 기본으로 최근 7일의 0% 데이터를 생성해 그래프가 비어 보이지 않도록 함
+const getDefaultRevisitData = (): RevisitTrendData[] => {
+  const data: RevisitTrendData[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    data.push({
+      date: date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" }),
+      percentage: 0,
+      count: 0,
+    });
+  }
+  return data;
+};
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -111,7 +126,7 @@ export default function DashboardPage() {
 
   // 차트 데이터 상태
   const [revisitTrendData, setRevisitTrendData] = useState<RevisitTrendData[]>(
-    []
+    getDefaultRevisitData()
   );
   const [responseTrendData, setResponseTrendData] = useState<
     ResponseTrendData[]
@@ -520,7 +535,7 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-2">
               <p className="text-3xl font-bold text-gray-900">
-                {dashboardStats.avgRating ? `${dashboardStats.avgRating}점` : "N/A"}
+                {`${dashboardStats.avgRating}점`}
               </p>
               <p className="text-xs text-gray-500">전반적 만족도</p>
             </div>
