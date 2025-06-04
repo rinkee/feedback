@@ -21,6 +21,8 @@ interface GeneratedQuestion {
   question_text: string;
   question_type: "text" | "rating" | "single_choice" | "multiple_choice";
   choices_text?: string[];
+  rating_min_label?: string;
+  rating_max_label?: string;
 }
 
 interface GeneratedSurvey {
@@ -37,6 +39,7 @@ export default function AISurveyPage() {
   );
   const [generatedSurvey, setGeneratedSurvey] =
     useState<GeneratedSurvey | null>(null);
+  const [requiredQuestions, setRequiredQuestions] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +65,34 @@ export default function AISurveyPage() {
       }
 
       setUser(session.user);
+
+      // 사용자의 활성화된 필수질문들 조회
+      try {
+        const { data: userRequiredQuestions, error: requiredQuestionsError } =
+          await supabase
+            .from("user_required_questions")
+            .select(
+              `
+              required_questions!inner(*)
+            `
+            )
+            .eq("user_id", session.user.id)
+            .eq("is_enabled", true)
+            .eq("required_questions.is_active", true);
+
+        if (!requiredQuestionsError && userRequiredQuestions) {
+          const requiredQuestionsData = userRequiredQuestions
+            .map((urq: any) => urq.required_questions)
+            .filter((rq: any) => rq && rq.is_active)
+            .sort((a: any, b: any) => a.order_num - b.order_num);
+
+          setRequiredQuestions(requiredQuestionsData);
+          console.log("조회된 필수질문들:", requiredQuestionsData);
+        }
+      } catch (error) {
+        console.error("필수질문 조회 오류:", error);
+      }
+
       setLoadingUser(false);
     };
     fetchUser();
@@ -77,10 +108,20 @@ export default function AISurveyPage() {
     setError(null);
 
     try {
+      // 현재 세션의 토큰 가져오기
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("인증 토큰이 없습니다. 다시 로그인해주세요.");
+      }
+
       const response = await fetch("/api/generate-survey", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           description: userInput.trim(),
@@ -97,9 +138,23 @@ export default function AISurveyPage() {
       setEditedSurvey(data.survey);
     } catch (err: any) {
       console.error("Error generating survey:", err);
-      setError(
-        "AI 설문 생성에 실패했습니다: " + (err.message || "알 수 없는 오류")
-      );
+
+      let errorMessage = "AI 설문 생성에 실패했습니다: ";
+
+      if (
+        err.message?.includes("과부하") ||
+        err.message?.includes("overloaded")
+      ) {
+        errorMessage =
+          "AI 서비스가 일시적으로 과부하 상태입니다. 1-2분 후 다시 시도해주세요.";
+      } else if (err.message?.includes("인증")) {
+        errorMessage =
+          "인증에 문제가 있습니다. 페이지를 새로고침하거나 다시 로그인해주세요.";
+      } else {
+        errorMessage += err.message || "알 수 없는 오류";
+      }
+
+      setError(errorMessage);
     } finally {
       setGenerating(false);
     }
@@ -131,7 +186,7 @@ export default function AISurveyPage() {
 
       const { data: storeData, error: storeError } = await supabase
         .from("stores")
-        .select("id, name")
+        .select("id, store_name")
         .eq("user_id", user.id)
         .single();
 
@@ -148,7 +203,7 @@ export default function AISurveyPage() {
             .from("stores")
             .insert({
               user_id: user.id,
-              name: "기본 매장",
+              store_name: "기본 매장",
               business_registration_number: "000-00-00000",
               owner_contact: "000-0000-0000",
               store_type_broad: "기타",
@@ -203,40 +258,83 @@ export default function AISurveyPage() {
       const newSurveyId = surveyData[0].id;
       console.log("생성된 설문 ID:", newSurveyId);
 
-      // 3. 질문 생성
-      const questionsToInsert = editedSurvey.questions.map((q, index) => {
-        const questionData = {
+      // 3. 사용자가 활성화한 필수질문들 조회 및 추가
+      let allQuestionsToInsert: any[] = [];
+
+      // 필수질문들을 먼저 추가 (앞쪽에 배치) - 활성화된 것만
+      if (requiredQuestions.length > 0) {
+        const requiredQuestionData = requiredQuestions.map(
+          (rq: any, index: number) => {
+            const questionData: any = {
+              survey_id: newSurveyId,
+              store_id: storeId, // store_id 추가
+              question_text: rq.question_text,
+              question_type: rq.question_type,
+              options: rq.options || { maxRating: 5, required: true },
+              order_num: index + 1,
+              is_required: true,
+              required_question_id: rq.id,
+            };
+
+            // rating 질문인 경우 라벨 정보 추가
+            if (rq.question_type === "rating") {
+              questionData.rating_min_label =
+                rq.options?.rating_min_label || "매우 불만족";
+              questionData.rating_max_label =
+                rq.options?.rating_max_label || "매우 만족";
+            }
+
+            return questionData;
+          }
+        );
+
+        allQuestionsToInsert = [...requiredQuestionData];
+        console.log("추가된 필수질문들:", requiredQuestionData);
+      }
+
+      // 4. AI가 생성한 질문들 추가 (필수질문 뒤에 배치)
+      const aiQuestionsToInsert = editedSurvey.questions.map((q, index) => {
+        const questionData: any = {
           survey_id: newSurveyId,
           store_id: storeId,
           question_text: q.question_text,
           question_type: q.question_type,
-          options: (() => {
-            if (
-              q.question_type === "single_choice" ||
-              q.question_type === "multiple_choice"
-            ) {
-              return {
-                choices_text: q.choices_text || [],
-                choice_ids: (q.choices_text || []).map(
-                  (_, idx) => `choice_${idx + 1}`
-                ),
-                isMultiSelect: q.question_type === "multiple_choice",
-              };
-            }
-            return null;
-          })(),
-          order_num: index + 1,
+          order_num: allQuestionsToInsert.length + index + 1, // 필수질문 뒤에 배치
+          is_required: false,
         };
-        console.log(`질문 ${index + 1} 데이터:`, questionData);
+
+        // 객관식 질문의 경우 options 추가
+        if (
+          q.question_type === "single_choice" ||
+          q.question_type === "multiple_choice"
+        ) {
+          questionData.options = {
+            choices_text: q.choices_text || [],
+            choice_ids: (q.choices_text || []).map(
+              (_, idx) => `choice_${idx + 1}`
+            ),
+            isMultiSelect: q.question_type === "multiple_choice",
+          };
+        }
+
+        // 별점 질문의 경우 rating 라벨 추가
+        if (q.question_type === "rating") {
+          questionData.rating_min_label = q.rating_min_label || "매우 불만족";
+          questionData.rating_max_label = q.rating_max_label || "매우 만족";
+        }
+
+        console.log(`AI 생성 질문 ${index + 1} 데이터:`, questionData);
         return questionData;
       });
 
-      console.log("생성할 질문들:", questionsToInsert);
+      allQuestionsToInsert = [...allQuestionsToInsert, ...aiQuestionsToInsert];
 
-      if (questionsToInsert.length > 0) {
+      console.log("생성할 모든 질문들:", allQuestionsToInsert);
+
+      if (allQuestionsToInsert.length > 0) {
         const { error: questionsError } = await supabase
           .from("questions")
-          .insert(questionsToInsert);
+          .insert(allQuestionsToInsert);
 
         if (questionsError) {
           console.error("질문 생성 에러:", questionsError);
@@ -368,14 +466,29 @@ export default function AISurveyPage() {
 
         {/* Error/Success Messages */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl flex items-start space-x-2">
-            <AlertTriangle
-              size={16}
-              className="text-red-500 mt-0.5 flex-shrink-0"
-            />
-            <span className="text-sm">
-              <strong className="font-semibold">오류:</strong> {error}
-            </span>
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start space-x-2">
+                <AlertTriangle
+                  size={16}
+                  className="text-red-500 mt-0.5 flex-shrink-0"
+                />
+                <span className="text-sm">
+                  <strong className="font-semibold">오류:</strong> {error}
+                </span>
+              </div>
+              {error.includes("과부하") && (
+                <button
+                  onClick={() => {
+                    setError(null);
+                    generateSurvey();
+                  }}
+                  className="ml-4 px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"
+                >
+                  다시 시도
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -583,6 +696,54 @@ export default function AISurveyPage() {
                               />
                             </div>
                           )}
+
+                          {question.question_type === "rating" && (
+                            <div className="space-y-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                              <label className="text-xs text-gray-600 font-medium">
+                                별점 척도 라벨 설정
+                              </label>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                                    1점 기준 (최소값)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={question.rating_min_label || ""}
+                                    onChange={(e) =>
+                                      updateQuestion(
+                                        index,
+                                        "rating_min_label",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="예: 매우 불만족"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                                    5점 기준 (최대값)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={question.rating_max_label || ""}
+                                    onChange={(e) =>
+                                      updateQuestion(
+                                        index,
+                                        "rating_max_label",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="예: 매우 만족"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -598,15 +759,95 @@ export default function AISurveyPage() {
                     <p className="text-gray-600">{editedSurvey.description}</p>
                   </div>
 
+                  {/* 필수질문 안내 */}
+                  {requiredQuestions.length > 0 && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 mr-3" />
+                        <div>
+                          <h3 className="text-sm font-medium text-green-800">
+                            필수질문 ({requiredQuestions.length}개)
+                          </h3>
+                          <p className="text-sm text-green-700 mt-1">
+                            아래 필수질문들이 자동으로 설문에 포함됩니다.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 질문 미리보기 */}
                   <div className="space-y-4">
+                    {/* 필수질문 미리보기 */}
+                    {requiredQuestions.map((requiredQ, index) => (
+                      <div
+                        key={`preview-required-${requiredQ.id}`}
+                        className="border border-green-200 rounded-lg p-4 bg-green-50"
+                      >
+                        <div className="flex items-center space-x-2 mb-3">
+                          <p className="font-medium text-green-900">
+                            {index + 1}. {requiredQ.question_text}
+                          </p>
+                          <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                            필수
+                          </span>
+                        </div>
+
+                        {requiredQ.question_type === "text" && (
+                          <textarea
+                            className="w-full p-3 border border-green-300 rounded-lg bg-white"
+                            rows={3}
+                            placeholder="응답자가 답변을 입력하는 영역"
+                            disabled
+                          />
+                        )}
+
+                        {requiredQ.question_type === "rating" && (
+                          <div>
+                            {/* 별점 척도 라벨 표시 */}
+                            {(requiredQ.options?.rating_min_label ||
+                              requiredQ.options?.rating_max_label) && (
+                              <div className="flex justify-between items-center mb-3 px-2 text-sm text-green-600">
+                                <span className="font-medium">
+                                  1점:{" "}
+                                  {requiredQ.options?.rating_min_label ||
+                                    "매우 불만족"}
+                                </span>
+                                <span className="font-medium">
+                                  5점:{" "}
+                                  {requiredQ.options?.rating_max_label ||
+                                    "매우 만족"}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="flex items-center space-x-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <span
+                                  key={star}
+                                  className="text-2xl text-yellow-400"
+                                >
+                                  ★
+                                </span>
+                              ))}
+                              <span className="ml-3 text-sm text-gray-500">
+                                (1-5점)
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* AI 생성 질문 미리보기 */}
                     {editedSurvey.questions.map((question, index) => (
                       <div
                         key={index}
                         className="border border-gray-200 rounded-lg p-4"
                       >
                         <p className="font-medium text-gray-900 mb-3">
-                          {index + 1}. {question.question_text}
+                          {requiredQuestions.length + index + 1}.{" "}
+                          {question.question_text}
                         </p>
 
                         {question.question_type === "text" && (
@@ -619,18 +860,35 @@ export default function AISurveyPage() {
                         )}
 
                         {question.question_type === "rating" && (
-                          <div className="flex items-center space-x-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <span
-                                key={star}
-                                className="text-2xl text-yellow-400"
-                              >
-                                ★
+                          <div>
+                            {/* 별점 척도 라벨 표시 */}
+                            {(question.rating_min_label ||
+                              question.rating_max_label) && (
+                              <div className="flex justify-between items-center mb-3 px-2 text-sm text-gray-600">
+                                <span className="font-medium">
+                                  1점:{" "}
+                                  {question.rating_min_label || "매우 불만족"}
+                                </span>
+                                <span className="font-medium">
+                                  5점:{" "}
+                                  {question.rating_max_label || "매우 만족"}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="flex items-center space-x-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <span
+                                  key={star}
+                                  className="text-2xl text-yellow-400"
+                                >
+                                  ★
+                                </span>
+                              ))}
+                              <span className="ml-3 text-sm text-gray-500">
+                                (1-5점)
                               </span>
-                            ))}
-                            <span className="ml-3 text-sm text-gray-500">
-                              (1-5점)
-                            </span>
+                            </div>
                           </div>
                         )}
 

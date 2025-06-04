@@ -24,6 +24,8 @@ interface Question {
   choices_text: string[];
   isMultiSelect?: boolean;
   order_num?: number;
+  is_required?: boolean; // 필수질문 여부 추가
+  required_question_id?: string; // 필수질문 템플릿 ID
 }
 
 interface SurveyData {
@@ -89,7 +91,7 @@ export default function EditSurveyPage() {
       try {
         const { data, error } = await supabase
           .from("questions")
-          .select("*")
+          .select("*, is_required, required_question_id")
           .eq("survey_id", surveyId)
           .order("order_num", { ascending: true });
 
@@ -183,6 +185,16 @@ export default function EditSurveyPage() {
   };
 
   const removeQuestion = (index: number) => {
+    const questionToRemove = questions[index];
+
+    // 필수질문인 경우 삭제 방지
+    if (questionToRemove.is_required) {
+      alert(
+        "필수질문은 삭제할 수 없습니다. 필수 질문 설정 메뉴에서 비활성화해주세요."
+      );
+      return;
+    }
+
     if (window.confirm("이 질문을 삭제하시겠습니까?")) {
       const updatedQuestions = questions.filter((_, i) => i !== index);
       setQuestions(updatedQuestions);
@@ -597,16 +609,26 @@ export default function EditSurveyPage() {
                                   className="py-4 border-b border-gray-200 last:border-b-0"
                                 >
                                   <div className="flex justify-between items-start mb-3">
-                                    <h3 className="text-sm font-semibold text-gray-800">
-                                      질문 #{qIndex + 1}
-                                    </h3>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeQuestion(qIndex)}
-                                      className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-50 transition-colors"
-                                    >
-                                      <X size={16} />
-                                    </button>
+                                    <div className="flex items-center space-x-2">
+                                      <h3 className="text-sm font-semibold text-gray-800">
+                                        질문 #{qIndex + 1}
+                                      </h3>
+                                      {q.is_required && (
+                                        <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                          필수질문
+                                        </span>
+                                      )}
+                                    </div>
+                                    {!q.is_required && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeQuestion(qIndex)}
+                                        className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-50 transition-colors"
+                                        title="질문 삭제"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                    )}
                                   </div>
 
                                   <div className="space-y-4">
@@ -618,6 +640,11 @@ export default function EditSurveyPage() {
                                         className="block text-xs font-medium text-gray-700 mb-1"
                                       >
                                         질문 내용:
+                                        {q.is_required && (
+                                          <span className="text-green-600 ml-1">
+                                            (필수질문은 수정할 수 없습니다)
+                                          </span>
+                                        )}
                                       </label>
                                       <textarea
                                         id={`question_text_${q.id || q.tempId}`}
@@ -630,9 +657,15 @@ export default function EditSurveyPage() {
                                           )
                                         }
                                         placeholder="질문 내용을 입력하세요"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-black focus:border-black sm:text-sm"
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-black focus:border-black sm:text-sm ${
+                                          q.is_required
+                                            ? "bg-gray-100 cursor-not-allowed"
+                                            : ""
+                                        }`}
                                         rows={2}
                                         required
+                                        readOnly={q.is_required}
+                                        disabled={q.is_required}
                                       />
                                     </div>
 
@@ -656,7 +689,12 @@ export default function EditSurveyPage() {
                                               .value as Question["question_type"]
                                           )
                                         }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-black focus:border-black sm:text-sm"
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-black focus:border-black sm:text-sm ${
+                                          q.is_required
+                                            ? "bg-gray-100 cursor-not-allowed"
+                                            : ""
+                                        }`}
+                                        disabled={q.is_required}
                                       >
                                         <option value="text">
                                           주관식 (텍스트)

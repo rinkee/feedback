@@ -5,7 +5,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter, usePathname } from "next/navigation";
-import { LogOut, User } from "lucide-react";
+import {
+  LogOut,
+  User,
+  BarChart3,
+  FileText,
+  Store,
+  Settings,
+  CheckSquare,
+} from "lucide-react";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -25,6 +33,25 @@ export default function RootLayout({
   const shouldShowSidebar =
     !noSidebarPaths.some((path) => pathname.startsWith(path)) &&
     pathname !== "/";
+
+  // 활성 메뉴 확인 함수
+  const isActiveMenu = (path: string) => {
+    if (path === "/dashboard" && pathname === "/dashboard") return true;
+    if (
+      path === "/dashboard/surveys" &&
+      pathname.startsWith("/dashboard/surveys")
+    )
+      return true;
+    if (
+      path === "/dashboard/required-questions" &&
+      pathname.startsWith("/dashboard/required-questions")
+    )
+      return true;
+    if (path === "/dashboard/store" && pathname.startsWith("/dashboard/store"))
+      return true;
+    if (path === "/settings" && pathname.startsWith("/settings")) return true;
+    return false;
+  };
 
   useEffect(() => {
     const getSession = async () => {
@@ -75,71 +102,56 @@ export default function RootLayout({
                 <nav className="flex-1 px-4 py-6 space-y-2">
                   <Link
                     href="/dashboard"
-                    className="flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                    className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                      isActiveMenu("/dashboard")
+                        ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
                   >
-                    <svg
-                      className="w-5 h-5 mr-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v3H8V5z"
-                      />
-                    </svg>
+                    <BarChart3 className="w-5 h-5 mr-3" />
                     대시보드
                   </Link>
                   <Link
                     href="/dashboard/surveys"
-                    className="flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                    className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                      isActiveMenu("/dashboard/surveys")
+                        ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
                   >
-                    <svg
-                      className="w-5 h-5 mr-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
+                    <FileText className="w-5 h-5 mr-3" />
                     설문 관리
                   </Link>
                   <Link
-                    href="/settings"
-                    className="flex items-center px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                    href="/dashboard/required-questions"
+                    className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                      isActiveMenu("/dashboard/required-questions")
+                        ? "bg-green-50 text-green-700 border-r-2 border-green-600"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
                   >
-                    <svg
-                      className="w-5 h-5 mr-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
+                    <CheckSquare className="w-5 h-5 mr-3" />
+                    필수 질문 설정
+                  </Link>
+                  <Link
+                    href="/dashboard/store"
+                    className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                      isActiveMenu("/dashboard/store")
+                        ? "bg-purple-50 text-purple-700 border-r-2 border-purple-600"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Store className="w-5 h-5 mr-3" />내 가게 정보
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                      isActiveMenu("/settings")
+                        ? "bg-gray-50 text-gray-700 border-r-2 border-gray-600"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Settings className="w-5 h-5 mr-3" />
                     설정
                   </Link>
                 </nav>

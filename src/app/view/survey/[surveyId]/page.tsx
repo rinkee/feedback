@@ -1,7 +1,7 @@
 // src/app/view/survey/[surveyId]/page.tsx
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent, useRef } from "react";
 import { useParams, useRouter } from "next/navigation"; // Added useRouter
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -11,6 +11,13 @@ import {
   Send,
   User,
   X,
+  Edit3,
+  Star,
+  CheckSquare,
+  MessageSquare,
+  ChevronRight,
+  Clock,
+  Award,
 } from "lucide-react";
 
 interface SurveyOption {
@@ -28,8 +35,11 @@ interface Question {
   placeholder?: string;
   maxRating?: number;
   labels?: { [key: number]: string };
+  rating_min_label?: string;
+  rating_max_label?: string;
   original_question_type?: string;
   original_options?: any;
+  required_question_category?: string;
 }
 
 interface Survey {
@@ -79,164 +89,210 @@ export default function SurveyViewPage() {
     null
   );
 
+  // Sticky progress bar state
+  const [showStickyProgress, setShowStickyProgress] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // 포커스 상태 관리
+  const [focusedQuestionId, setFocusedQuestionId] = useState<string | null>(
+    null
+  );
+
+  // 진행률 계산 함수
+  const calculateProgress = () => {
+    if (!survey?.questions.length) return 0;
+    const answeredCount = survey.questions.filter((q) => {
+      const answer = answers[q.id];
+      // 포커스된 텍스트 질문은 완료로 카운트하지 않음
+      if (q.type === "textarea" && focusedQuestionId === q.id) {
+        return false;
+      }
+      return (
+        (answer?.response_text && answer.response_text.trim()) ||
+        (answer?.selected_option_ids &&
+          answer.selected_option_ids.length > 0) ||
+        typeof answer?.rating === "number"
+      );
+    }).length;
+    return Math.round((answeredCount / survey.questions.length) * 100);
+  };
+
+  // Intersection Observer for sticky progress
+  useEffect(() => {
+    if (!headerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowStickyProgress(!entry.isIntersecting);
+      },
+      {
+        threshold: 0,
+        rootMargin: "-60px 0px 0px 0px", // 60px 위에서 사라질 때 트리거
+      }
+    );
+
+    observer.observe(headerRef.current);
+
+    return () => observer.disconnect();
+  }, [survey]);
+
+  // 질문 유형별 아이콘 반환
+  const getQuestionIcon = (type: string) => {
+    switch (type) {
+      case "textarea":
+        return <MessageSquare className="h-5 w-5 text-blue-500" />;
+      case "rating":
+        return <Star className="h-5 w-5 text-yellow-500" />;
+      case "select":
+        return <CheckSquare className="h-5 w-5 text-green-500" />;
+      default:
+        return <Edit3 className="h-5 w-5 text-gray-500" />;
+    }
+  };
+
   useEffect(() => {
     async function fetchSurveyData() {
-      if (!surveyId) {
-        setError("Survey ID is missing.");
-        setLoading(false);
-        return;
-      }
-
-      console.log("Attempting to fetch survey with ID:", surveyId);
-      console.log("Using supabase client:", !!supabase);
-      setLoading(true);
-      setError(null);
-
       try {
-        // 먼저 전체 설문 테이블에서 모든 레코드 조회
-        const { data: allSurveysTest, error: allSurveysTestError } =
-          await supabase.from("surveys").select("*").limit(10);
+        setLoading(true);
+        setError(null);
 
-        console.log("All surveys test query:", {
-          allSurveysTest,
-          allSurveysTestError,
-        });
+        const surveyId = params.surveyId as string;
+        console.log("Fetching survey data for:", surveyId);
 
-        // 특정 설문 조회
+        // 1. 설문 기본 정보 조회
         const { data: surveyData, error: surveyError } = await supabase
           .from("surveys")
-          .select("*")
-          .eq("id", surveyId);
-
-        console.log("Survey query result:", { surveyData, surveyError });
+          .select("id, title, description, is_active")
+          .eq("id", surveyId)
+          .single();
 
         if (surveyError) {
           console.error("Survey fetch error:", surveyError);
-          throw surveyError;
+          if (surveyError.code === "PGRST116") {
+            throw new Error("설문을 찾을 수 없습니다.");
+          }
+          throw new Error("설문 정보를 불러오는데 실패했습니다.");
         }
 
-        // 결과가 배열로 반환되므로 첫 번째 요소를 확인
-        if (!surveyData || surveyData.length === 0) {
-          console.log("No survey found with ID:", surveyId);
-
-          // 특정 사용자의 설문만 조회해보기
-          console.log("Attempting to fetch surveys for specific user...");
-          const { data: userSurveys, error: userSurveysError } = await supabase
-            .from("surveys")
-            .select("*")
-            .eq("user_id", "5e1f5903-b48d-4502-95cb-838df25fbf48")
-            .limit(5);
-
-          console.log("User surveys:", { userSurveys, userSurveysError });
-
-          throw new Error(
-            "설문을 찾을 수 없습니다. 설문이 삭제되었거나 잘못된 링크일 수 있습니다."
-          );
+        if (!surveyData.is_active) {
+          throw new Error("현재 활성화되지 않은 설문입니다.");
         }
 
-        if (surveyData.length > 1) {
-          console.warn("Multiple surveys found with the same ID");
-        }
+        console.log("Survey data:", surveyData);
 
-        const survey = surveyData[0];
-        console.log("Found survey:", survey);
-
+        // 2. 질문 목록 조회 (필수질문 카테고리 정보 포함)
         const { data: questionsData, error: questionsError } = await supabase
           .from("questions")
-          .select("id, question_text, question_type, options, order_num")
+          .select(
+            `
+            id,
+            question_text,
+            question_type,
+            options,
+            order_num,
+            is_required,
+            required_question_id,
+            required_questions:required_question_id (
+              category
+            )
+          `
+          )
           .eq("survey_id", surveyId)
           .order("order_num", { ascending: true });
 
-        console.log("Questions query result:", {
-          questionsData,
-          questionsError,
-        }); // 디버깅용 로그 추가
-
         if (questionsError) {
           console.error("Questions fetch error:", questionsError);
-          throw questionsError;
+          throw new Error("질문 목록을 불러오는데 실패했습니다.");
         }
 
-        const transformedQuestions: Question[] = (questionsData || []).map(
-          (q: any) => {
-            let questionOptions: SurveyOption[] = [];
-            let isMultiSelectFlag = false;
-            let currentQuestionType: Question["type"] = "textarea";
+        console.log("Questions data:", questionsData);
 
+        // 질문 데이터 형식 변환
+        const formattedQuestions = questionsData.map((q): Question => {
+          const dbQuestionType = q.question_type;
+          let feQuestionType: Question["type"];
+
+          if (typeof dbQuestionType === "string") {
             if (
-              q.question_type === "multiple_choice" ||
-              q.question_type === "boolean" ||
-              q.question_type === "select"
+              dbQuestionType === "text" ||
+              dbQuestionType === "textarea" ||
+              dbQuestionType === "short_text"
             ) {
-              currentQuestionType = "select";
-              if (
-                q.options &&
-                q.options.choices_text &&
-                Array.isArray(q.options.choices_text)
-              ) {
-                questionOptions = q.options.choices_text.map(
-                  (text: string, index: number) => ({
-                    id:
-                      q.options.choice_ids?.[index] ||
-                      `${q.id}_option_${index}`,
-                    text: text,
-                  })
-                );
-              }
-              isMultiSelectFlag =
-                q.question_type === "multiple_choice"
-                  ? !!q.options?.isMultiSelect
-                  : false;
-              if (
-                q.question_type === "boolean" &&
-                questionOptions.length === 0
-              ) {
-                questionOptions = [
-                  { id: `${q.id}_option_yes`, text: "예" },
-                  { id: `${q.id}_option_no`, text: "아니오" },
-                ];
-              }
-            } else if (q.question_type === "rating") {
-              currentQuestionType = "rating";
+              feQuestionType = "textarea";
+            } else if (dbQuestionType === "rating") {
+              feQuestionType = "rating";
             } else if (
-              q.question_type === "textarea" ||
-              q.question_type === "short_text" ||
-              q.question_type === "text"
+              dbQuestionType === "select" ||
+              dbQuestionType === "single_choice" ||
+              dbQuestionType === "multiple_choice" ||
+              dbQuestionType === "boolean"
             ) {
-              currentQuestionType = "textarea";
+              feQuestionType = "select";
+            } else {
+              console.warn(
+                `Unknown string question type from DB: ${dbQuestionType} for question ID ${q.id}, defaulting to textarea.`
+              );
+              feQuestionType = "textarea"; // Default for unknown string types
             }
-
-            return {
-              id: q.id,
-              text: q.question_text,
-              type: currentQuestionType,
-              options: questionOptions,
-              isMultiSelect: isMultiSelectFlag,
-              required: q.required ?? false,
-              placeholder: q.placeholder,
-              maxRating:
-                q.max_rating ??
-                (currentQuestionType === "rating" ? 5 : undefined),
-              labels:
-                q.labels ?? (currentQuestionType === "rating" ? {} : undefined),
-              original_question_type: q.question_type,
-              original_options: q.options,
-            };
+          } else {
+            // Handle null, undefined, or non-string dbQuestionType
+            console.warn(
+              `Question type from DB is not a string (value: ${dbQuestionType}) for question ID ${q.id}, defaulting to textarea.`
+            );
+            feQuestionType = "textarea"; // Default if type is missing or not a string
           }
-        );
 
-        console.log("Transformed questions:", transformedQuestions); // 디버깅용 로그 추가
-        setSurvey({ ...survey, questions: transformedQuestions });
+          const dbOptions = q.options; // q.options is the JSONB field from the database
+
+          return {
+            id: q.id,
+            text: q.question_text,
+            type: feQuestionType,
+            options: dbOptions?.choices_text
+              ? dbOptions.choices_text.map((text: string, index: number) => ({
+                  id: `choice_${index + 1}`,
+                  text: text,
+                }))
+              : undefined,
+            isMultiSelect:
+              feQuestionType === "select" &&
+              (dbQuestionType === "multiple_choice" || // dbQuestionType could be string here
+                dbOptions?.isMultiSelect === true),
+            required: q.is_required,
+            placeholder: dbOptions?.placeholder,
+            maxRating: dbOptions?.maxRating || 5,
+            labels: dbOptions?.labels, // For specific rating point labels if ever used
+            rating_min_label: dbOptions?.rating_min_label,
+            rating_max_label: dbOptions?.rating_max_label,
+            original_question_type:
+              typeof dbQuestionType === "string"
+                ? dbQuestionType
+                : String(dbQuestionType), // Store original, ensure string
+            original_options: dbOptions,
+            required_question_category:
+              Array.isArray(q.required_questions) &&
+              q.required_questions.length > 0
+                ? (q.required_questions as any[])[0].category
+                : null,
+          };
+        });
+
+        setSurvey({
+          id: surveyData.id,
+          title: surveyData.title,
+          description: surveyData.description,
+          questions: formattedQuestions,
+        });
       } catch (err: any) {
-        console.error("Error fetching survey:", err);
-        setError(err.message || "Failed to load survey. Please try again.");
+        console.error("Fetch error:", err);
+        setError(err.message || "설문을 불러오는데 실패했습니다.");
       } finally {
         setLoading(false);
       }
     }
 
     fetchSurveyData();
-  }, [surveyId, supabase]);
+  }, [params.surveyId]);
 
   const handleAnswerChange = (
     questionId: string,
@@ -352,10 +408,6 @@ export default function SurveyViewPage() {
     setCustomerInfoError(null);
 
     // 고객 정보 필수 필드 검증
-    if (!customerInfo.name.trim()) {
-      setCustomerInfoError("이름을 입력해주세요.");
-      return;
-    }
     if (!customerInfo.age_group) {
       setCustomerInfoError("연령대를 선택해주세요.");
       return;
@@ -378,17 +430,23 @@ export default function SurveyViewPage() {
       console.log("Customer info:", customerInfo);
       console.log("Survey answers:", answers);
 
+      // 이름이 없으면 "익명" + 랜덤번호로 기본값 생성
+      const customerName =
+        customerInfo.name.trim() ||
+        `익명${Math.floor(Math.random() * 1000)
+          .toString()
+          .padStart(3, "0")}`;
+
       // 1. 고객 정보 저장 - 항상 새로운 레코드 생성
       const { data: customerData, error: customerInsertError } = await supabase
         .from("customer_info")
         .insert({
           survey_id: surveyId,
           user_id: userId,
-          name: customerInfo.name.trim(),
+          name: customerName,
           age_group: customerInfo.age_group,
           gender: customerInfo.gender,
           phone: customerInfo.phone?.trim() || null,
-          email: customerInfo.email?.trim() || null,
         })
         .select();
 
@@ -414,11 +472,18 @@ export default function SurveyViewPage() {
             typeof ans.rating === "number"
         )
         .map((ans) => {
+          // 해당 질문의 필수질문 카테고리 찾기
+          const question = survey!.questions.find(
+            (q) => q.id === ans.question_id
+          );
+          const requiredQuestionCategory = question?.required_question_category;
+
           const responseData: any = {
             survey_id: surveyId,
             question_id: ans.question_id,
             user_id: userId,
             customer_info_id: customerData[0].id, // 새로 생성된 고객 정보 ID 연결
+            required_question_category: requiredQuestionCategory || null, // 필수질문 카테고리 저장
           };
 
           if (ans.response_text && ans.response_text.trim() !== "") {
@@ -483,371 +548,389 @@ export default function SurveyViewPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <Loader2 className="h-12 w-12 text-black animate-spin" />
-        <p className="text-slate-600 mt-4 text-lg">
-          설문지를 불러오는 중입니다...
-        </p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-gray-600" />
+          <p className="text-gray-600">설문지를 불러오는 중...</p>
+        </div>
       </div>
     );
   }
 
   if (submitSuccess) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <CheckCircle className="w-20 h-20 text-green-500 mb-6" />
-        <h1 className="text-3xl font-bold text-slate-800 mb-4">
-          설문에 참여해주셔서 감사합니다!
-        </h1>
-        <p className="text-slate-600 text-lg max-w-md mb-8">
-          응답이 성공적으로 제출되었습니다.
-        </p>
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="px-6 py-3 bg-black text-white font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-md"
-          aria-label="대시보드로 돌아가기"
-        >
-          대시보드로 돌아가기
-        </button>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg p-8 text-center max-w-sm w-full">
+          <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-600" />
+          <h1 className="text-xl font-bold text-gray-900 mb-2">설문 완료!</h1>
+          <p className="text-gray-600 mb-6">소중한 의견 감사합니다.</p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg"
+          >
+            대시보드로 이동
+          </button>
+        </div>
       </div>
     );
   }
 
   if (error || !survey) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center">
-        <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
-        <p className="text-red-700 text-lg mb-6">
-          {error || "설문지를 찾을 수 없습니다."}
-        </p>
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="px-6 py-3 bg-black text-white font-medium rounded-lg hover:bg-slate-800 transition-colors shadow-md"
-          aria-label="대시보드로 돌아가기"
-        >
-          대시보드로 돌아가기
-        </button>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg p-8 text-center max-w-sm w-full">
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">오류 발생</h2>
+          <p className="text-gray-600 mb-6">
+            {error || "설문을 찾을 수 없습니다."}
+          </p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg"
+          >
+            대시보드로 이동
+          </button>
+        </div>
       </div>
     );
   }
 
+  const progress = calculateProgress();
+
   return (
-    <div className="min-h-screen bg-slate-50 py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
-        <header className="mb-10 text-center border-b border-slate-200 pb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
+    <div className="min-h-screen bg-gray-50">
+      {/* Sticky Progress Bar */}
+      {showStickyProgress && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex justify-between text-sm text-gray-600 mb-2">
+              <span className="font-medium">{survey.title}</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-gray-900 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {/* Header */}
+        <div ref={headerRef} className="bg-white rounded-lg p-6 mb-6">
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
             {survey.title}
           </h1>
           {survey.description && (
-            <p className="mt-4 text-base sm:text-lg leading-relaxed text-slate-600">
-              {survey.description}
-            </p>
+            <p className="text-gray-600 text-sm mb-4">{survey.description}</p>
           )}
-        </header>
 
+          {/* Progress */}
+          <div className="mb-2">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>진행률</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-gray-900 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Error Display */}
         {error && (
-          <div
-            className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md shadow"
-            role="alert"
-          >
-            <div className="flex">
-              <div className="py-1">
-                <AlertTriangle className="h-6 w-6 text-red-500 mr-3" />
-              </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start">
+              <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 mr-3" />
               <div>
-                <p className="font-bold">오류 발생</p>
-                <p className="text-sm">{error}</p>
+                <p className="text-red-800 text-sm font-medium">오류 발생</p>
+                <p className="text-red-700 text-sm">{error}</p>
               </div>
             </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {survey.questions.map((question, index) => (
-            <div
-              key={question.id}
-              id={`question-${question.id}`}
-              className="bg-white p-6 sm:p-8 rounded-xl shadow-lg"
-            >
-              <div className="mb-5">
-                <p className="block text-sm font-medium text-slate-500 mb-1">
-                  질문 {index + 1}
-                  {question.required && (
-                    <span className="text-red-500 ml-0.5">*</span>
-                  )}
-                </p>
-                <p className="text-lg font-semibold text-slate-800 leading-tight">
-                  {question.text}
-                </p>
-              </div>
+        {/* Survey Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {survey.questions.map((question, index) => {
+            const isAnswered = () => {
+              const answer = answers[question.id];
+              // 포커스된 텍스트 질문은 완료로 처리하지 않음
+              if (
+                question.type === "textarea" &&
+                focusedQuestionId === question.id
+              ) {
+                return false;
+              }
+              return (
+                (answer?.response_text && answer.response_text.trim()) ||
+                (answer?.selected_option_ids &&
+                  answer.selected_option_ids.length > 0) ||
+                typeof answer?.rating === "number"
+              );
+            };
 
-              {question.type === "textarea" && (
-                <textarea
-                  rows={4}
-                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors placeholder-slate-400 text-sm sm:text-base"
-                  placeholder={
-                    question.placeholder || "자유롭게 답변해주세요..."
-                  }
-                  value={answers[question.id]?.response_text || ""}
-                  onChange={(e) =>
-                    handleAnswerChange(
-                      question.id,
-                      e.target.value,
-                      question.type
-                    )
-                  }
-                  required={question.required}
-                  aria-label={`질문 ${index + 1}: ${question.text}`}
-                />
-              )}
-
-              {question.type === "select" && question.options && (
-                <div className="space-y-3">
-                  {question.options.map((option) => (
-                    <label
-                      key={option.id}
-                      className={`flex items-center p-3.5 border rounded-lg transition-all cursor-pointer text-sm sm:text-base 
-                                  ${
-                                    (
-                                      question.isMultiSelect
-                                        ? (
-                                            answers[question.id]
-                                              ?.selected_option_ids || []
-                                          ).includes(option.id)
-                                        : answers[question.id]
-                                            ?.selected_option_ids?.[0] ===
-                                          option.id
-                                    )
-                                      ? "bg-slate-100 border-black ring-1 ring-black shadow-inner"
-                                      : "bg-white border-slate-300 hover:border-slate-400"
-                                  }`}
+            return (
+              <div
+                key={question.id}
+                id={`question-${question.id}`}
+                className={`rounded-lg p-5 transition-all duration-300 ${
+                  isAnswered()
+                    ? "bg-gray-200 opacity-70"
+                    : "bg-white ring-1 ring-gray-200 shadow-sm"
+                }`}
+              >
+                {/* Question Header */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span
+                      className={`inline-block px-3 py-1 text-md font-medium rounded-full ${
+                        isAnswered()
+                          ? "bg-gray-300 text-gray-600"
+                          : "bg-gray-100 text-gray-700"
+                      }`}
                     >
-                      <input
-                        type={question.isMultiSelect ? "checkbox" : "radio"}
-                        name={`question-${question.id}${
-                          question.isMultiSelect ? "" : ""
-                        }`}
-                        value={option.id}
-                        checked={
-                          question.isMultiSelect
-                            ? (
-                                answers[question.id]?.selected_option_ids || []
-                              ).includes(option.id)
-                            : answers[question.id]?.selected_option_ids?.[0] ===
-                              option.id
-                        }
-                        onChange={() =>
-                          handleAnswerChange(
-                            question.id,
-                            option.id,
-                            question.type,
-                            question.isMultiSelect,
-                            option.id
-                          )
-                        }
-                        className={`${
-                          question.isMultiSelect
-                            ? "form-checkbox"
-                            : "form-radio"
-                        } h-4 w-4 text-black border-slate-400 focus:ring-black focus:ring-offset-1`}
-                        required={
-                          question.required &&
-                          !question.isMultiSelect &&
-                          !answers[question.id]?.selected_option_ids?.length
-                        }
-                        aria-label={option.text}
-                      />
-                      <span className="ml-3 font-medium text-slate-700">
-                        {option.text}
-                      </span>
-                    </label>
-                  ))}
-                  {question.required &&
-                    question.isMultiSelect &&
-                    (!answers[question.id]?.selected_option_ids ||
-                      answers[question.id]?.selected_option_ids?.length ===
-                        0) && (
-                      <input
-                        type="text"
-                        required
-                        style={{ display: "none" }}
-                        value={(
-                          answers[question.id]?.selected_option_ids || []
-                        ).join(",")}
-                        readOnly
-                        aria-hidden="true"
-                      />
+                      {index + 1}
+                    </span>
+                    {question.required && (
+                      <span className="text-red-500 text-sm">필수</span>
                     )}
-                </div>
-              )}
-
-              {question.type === "rating" && (
-                <div
-                  className="flex items-center space-x-1 sm:space-x-2 justify-center py-2 mt-2 flex-wrap"
-                  role="radiogroup"
-                  aria-labelledby={`question-label-${question.id}`}
-                >
-                  <p id={`question-label-${question.id}`} className="sr-only">
+                  </div>
+                  <h3
+                    className={`text-xl leading-7 break-keep  font-semibold transition-colors duration-300 ${
+                      isAnswered() ? "text-gray-600" : "text-gray-900"
+                    }`}
+                  >
                     {question.text}
-                  </p>
-                  {Array.from(
-                    { length: question.maxRating || 5 },
-                    (_, i) => i + 1
-                  ).map((ratingValue) => (
-                    <label
-                      key={ratingValue}
-                      className={`relative flex flex-col items-center justify-center p-2 border-2 rounded-lg cursor-pointer transition-all w-12 h-12 sm:w-14 sm:h-14 my-1 
-                                  ${
-                                    answers[question.id]?.rating === ratingValue
-                                      ? "border-black bg-slate-100 shadow-inner"
-                                      : "border-slate-300 hover:border-slate-400 bg-white"
-                                  }`}
-                    >
-                      <input
-                        type="radio"
-                        name={`question-${question.id}`}
-                        value={ratingValue}
-                        checked={answers[question.id]?.rating === ratingValue}
-                        onChange={() =>
+                  </h3>
+                </div>
+
+                {/* Question Content */}
+                <div>
+                  {question.type === "textarea" && (
+                    <div>
+                      <textarea
+                        rows={4}
+                        className={`w-full p-3 rounded-lg resize-none transition-all duration-300 ${
+                          isAnswered()
+                            ? "border-0 bg-gray-300 text-gray-600"
+                            : "border border-gray-300 bg-white focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                        }`}
+                        placeholder="답변을 입력해주세요"
+                        value={answers[question.id]?.response_text || ""}
+                        onChange={(e) =>
                           handleAnswerChange(
                             question.id,
-                            ratingValue,
+                            e.target.value,
                             question.type
                           )
                         }
-                        className="sr-only"
-                        required={
-                          question.required &&
-                          typeof answers[question.id]?.rating !== "number"
-                        }
-                        aria-label={`${ratingValue}점${
-                          question.labels && question.labels[ratingValue]
-                            ? `: ${question.labels[ratingValue]}`
-                            : ""
-                        }`}
+                        onFocus={() => setFocusedQuestionId(question.id)}
+                        onBlur={() => setFocusedQuestionId(null)}
+                        required={question.required}
                       />
-                      <span
-                        className={`text-lg sm:text-xl font-semibold ${
-                          answers[question.id]?.rating === ratingValue
-                            ? "text-black"
-                            : "text-slate-600"
+                    </div>
+                  )}
+
+                  {question.type === "select" && question.options && (
+                    <div className="space-y-3">
+                      {question.options.map((option) => {
+                        const isSelected = question.isMultiSelect
+                          ? (
+                              answers[question.id]?.selected_option_ids || []
+                            ).includes(option.id)
+                          : answers[question.id]?.selected_option_ids?.[0] ===
+                            option.id;
+
+                        return (
+                          <label
+                            key={option.id}
+                            className={`block p-4 rounded-lg cursor-pointer transition-all duration-300 ${
+                              isAnswered()
+                                ? isSelected
+                                  ? "bg-blue-100 border-0"
+                                  : "bg-gray-300 border-0"
+                                : isSelected
+                                ? "border border-gray-900 bg-gray-50"
+                                : "border border-gray-300 bg-white"
+                            }`}
+                          >
+                            <div className="flex items-center">
+                              <input
+                                type={
+                                  question.isMultiSelect ? "checkbox" : "radio"
+                                }
+                                name={`question-${question.id}`}
+                                value={option.id}
+                                checked={isSelected}
+                                onChange={() =>
+                                  handleAnswerChange(
+                                    question.id,
+                                    option.id,
+                                    question.type,
+                                    question.isMultiSelect,
+                                    option.id
+                                  )
+                                }
+                                className="mr-3"
+                                required={
+                                  question.required &&
+                                  !question.isMultiSelect &&
+                                  !answers[question.id]?.selected_option_ids
+                                    ?.length
+                                }
+                              />
+                              <span
+                                className={`transition-colors duration-300 ${
+                                  isAnswered()
+                                    ? isSelected
+                                      ? "text-blue-700 font-medium"
+                                      : "text-gray-600"
+                                    : "text-gray-900"
+                                }`}
+                              >
+                                {option.text}
+                              </span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {question.type === "rating" && (
+                    <div>
+                      {/* Rating Labels: This specific div for labels should always render if question.type is 'rating' */}
+                      <div
+                        className={`flex justify-between text-sm mb-4 px-0 transition-colors duration-300 ${
+                          isAnswered() ? "text-gray-500" : "text-gray-600"
                         }`}
                       >
-                        {ratingValue}
-                      </span>
-                      {question.labels && question.labels[ratingValue] && (
-                        <span
-                          className={`absolute -bottom-5 text-xs text-center w-full ${
-                            answers[question.id]?.rating === ratingValue
-                              ? "text-black font-medium"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          {question.labels[ratingValue]}
+                        <span>
+                          {question.rating_min_label || "매우 불만족"}
                         </span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+                        <span>{question.rating_max_label || "매우 만족"}</span>
+                      </div>
 
-          <div className="pt-6">
+                      {/* Rating Options */}
+                      <div className="grid grid-cols-5 gap-2">
+                        {Array.from(
+                          { length: question.maxRating || 5 },
+                          (_, i) => i + 1
+                        ).map((ratingValue) => {
+                          const isSelected =
+                            answers[question.id]?.rating === ratingValue;
+                          return (
+                            <label
+                              key={ratingValue}
+                              className={`block p-4 rounded-lg text-center cursor-pointer transition-all duration-300 ${
+                                isAnswered()
+                                  ? isSelected
+                                    ? "bg-gray-500 border-0"
+                                    : "bg-gray-300 border-0"
+                                  : isSelected
+                                  ? "border border-gray-900 bg-gray-100"
+                                  : "border border-gray-300 bg-white"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name={`question-${question.id}`}
+                                value={ratingValue}
+                                checked={isSelected}
+                                onChange={() =>
+                                  handleAnswerChange(
+                                    question.id,
+                                    ratingValue,
+                                    question.type
+                                  )
+                                }
+                                className="sr-only"
+                                required={
+                                  question.required &&
+                                  typeof answers[question.id]?.rating !==
+                                    "number"
+                                }
+                              />
+                              <div
+                                className={`text-lg font-bold transition-colors duration-300 ${
+                                  isAnswered()
+                                    ? isSelected
+                                      ? "text-white"
+                                      : "text-gray-600"
+                                    : "text-gray-900"
+                                }`}
+                              >
+                                {ratingValue}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Submit Button */}
+          <div className="rounded-lg p-6">
             <button
               type="submit"
               disabled={submitting || loading}
-              className="w-full flex items-center justify-center px-6 py-3 text-base font-medium rounded-lg text-white bg-black hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black transition-colors shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
-              aria-label="설문 완료 및 제출하기"
+              className="w-full py-3 px-4 bg-gray-900 text-white font-medium rounded-lg disabled:opacity-50"
             >
               {submitting ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <div className="flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   제출 중...
-                </>
+                </div>
               ) : (
-                <>
-                  <Send className="mr-2 h-5 w-5" />
-                  설문 완료 및 제출하기
-                </>
+                `설문 완료`
               )}
             </button>
           </div>
         </form>
       </div>
-      <footer className="mt-12 text-center text-sm text-slate-500 py-8 border-t border-slate-200">
-        <p>
-          &copy; {new Date().getFullYear()} FeedbackFlow. All rights reserved.
-        </p>
-      </footer>
 
-      {/* 고객 정보 입력 모달 */}
+      {/* Customer Info Modal */}
       {showCustomerInfoModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <User className="h-6 w-6 text-black mr-2" />
-                  <h3 className="text-xl font-bold text-gray-900">
-                    고객 정보 입력
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setShowCustomerInfoModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                  disabled={submitting}
-                >
-                  <X className="h-6 w-6" />
-                </button>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  정보 입력
+                </h3>
               </div>
-              <p className="mt-2 text-sm text-gray-600">
-                설문 제출을 위해 간단한 정보를 입력해주세요.
+              <p className="text-sm text-gray-600 mt-2">
+                왜 이런 정보를 수집하나요?
+              </p>
+              <p className="text-sm text-gray-600 mt-2">
+                더 나은 맞춤 서비스를 제공하기 위해 어떤 고객님들이 참여하고
+                피드백을 주셨는지 확인하기 위해 필요해요.
               </p>
             </div>
 
-            <form onSubmit={handleCustomerInfoSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleCustomerInfoSubmit} className="p-6 space-y-6">
               {customerInfoError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-                  <p className="text-sm">{customerInfoError}</p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-700 text-sm">{customerInfoError}</p>
                 </div>
               )}
 
-              {/* 이름 입력 */}
+              {/* Age Group */}
               <div>
-                <label
-                  htmlFor="customer-name"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  이름 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="customer-name"
-                  value={customerInfo.name}
-                  onChange={(e) =>
-                    setCustomerInfo((prev) => ({
-                      ...prev,
-                      name: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-                  placeholder="이름을 입력해주세요"
-                  required
-                  disabled={submitting}
-                />
-              </div>
-
-              {/* 연령대 선택 */}
-              <div>
-                <label
-                  htmlFor="customer-age"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
+                <label className="block text-sm font-medium text-gray-900 mb-3">
                   연령대 <span className="text-red-500">*</span>
                 </label>
                 <select
-                  id="customer-age"
                   value={customerInfo.age_group}
                   onChange={(e) =>
                     setCustomerInfo((prev) => ({
@@ -855,7 +938,7 @@ export default function SurveyViewPage() {
                       age_group: e.target.value,
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  className="w-full px-4 py-5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200"
                   required
                   disabled={submitting}
                 >
@@ -869,14 +952,21 @@ export default function SurveyViewPage() {
                 </select>
               </div>
 
-              {/* 성별 선택 */}
+              {/* Gender */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-900 mb-3">
                   성별 <span className="text-red-500">*</span>
                 </label>
-                <div className="space-y-2">
-                  {["남성", "여성", "기타", "답변하지 않음"].map((gender) => (
-                    <label key={gender} className="flex items-center">
+                <div className="grid grid-cols-3 gap-3">
+                  {["남성", "여성", "답변안함"].map((gender) => (
+                    <label
+                      key={gender}
+                      className={`p-4 border rounded-lg text-center cursor-pointer text-sm font-medium transition-all duration-200 ${
+                        customerInfo.gender === gender
+                          ? "border-gray-900 bg-gray-100 text-gray-900"
+                          : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="gender"
@@ -888,29 +978,44 @@ export default function SurveyViewPage() {
                             gender: e.target.value,
                           }))
                         }
-                        className="h-4 w-4 text-black border-gray-300 focus:ring-black"
+                        className="sr-only"
                         required
                         disabled={submitting}
                       />
-                      <span className="ml-2 text-sm text-gray-700">
-                        {gender}
-                      </span>
+                      {gender}
                     </label>
                   ))}
                 </div>
               </div>
 
-              {/* 전화번호 입력 (선택사항) */}
+              {/* Name (Optional) */}
               <div>
-                <label
-                  htmlFor="customer-phone"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  전화번호 <span className="text-gray-400">(선택사항)</span>
+                <label className="block text-sm font-medium text-gray-900 mb-3">
+                  이름 <span className="text-gray-500 text-xs">(선택사항)</span>
+                </label>
+                <input
+                  type="text"
+                  value={customerInfo.name}
+                  onChange={(e) =>
+                    setCustomerInfo((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200"
+                  placeholder="이름을 입력해주세요"
+                  disabled={submitting}
+                />
+              </div>
+
+              {/* Phone (Optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-3">
+                  전화번호{" "}
+                  <span className="text-gray-500 text-xs">(선택사항)</span>
                 </label>
                 <input
                   type="tel"
-                  id="customer-phone"
                   value={customerInfo.phone}
                   onChange={(e) =>
                     setCustomerInfo((prev) => ({
@@ -918,42 +1023,18 @@ export default function SurveyViewPage() {
                       phone: e.target.value,
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200"
                   placeholder="010-1234-5678"
                   disabled={submitting}
                 />
               </div>
 
-              {/* 이메일 입력 (선택사항) */}
-              <div>
-                <label
-                  htmlFor="customer-email"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  이메일 <span className="text-gray-400">(선택사항)</span>
-                </label>
-                <input
-                  type="email"
-                  id="customer-email"
-                  value={customerInfo.email}
-                  onChange={(e) =>
-                    setCustomerInfo((prev) => ({
-                      ...prev,
-                      email: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-                  placeholder="example@email.com"
-                  disabled={submitting}
-                />
-              </div>
-
-              {/* 제출 버튼 */}
+              {/* Buttons */}
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowCustomerInfoModal(false)}
-                  className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all duration-200"
                   disabled={submitting}
                 >
                   취소
@@ -961,18 +1042,15 @@ export default function SurveyViewPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 flex items-center justify-center px-4 py-2 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg font-medium disabled:opacity-50 transition-all duration-200"
                 >
                   {submitting ? (
-                    <>
+                    <div className="flex items-center justify-center">
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      제출 중...
-                    </>
+                      제출 중
+                    </div>
                   ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      설문 제출하기
-                    </>
+                    "완료"
                   )}
                 </button>
               </div>

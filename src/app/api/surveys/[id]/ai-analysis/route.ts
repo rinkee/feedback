@@ -68,6 +68,31 @@ export async function POST(
 
     console.log("10. 질문 수:", questions?.length || 0);
 
+    // 가게 정보 조회
+    console.log("10.5. 가게 정보 조회...");
+    const { data: storeData, error: storeError } = await supabase
+      .from("stores")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    let storeInfo = null;
+    if (storeData && !storeError) {
+      storeInfo = {
+        store_name: storeData.store_name,
+        store_type_broad: storeData.store_type_broad,
+        location: storeData.location,
+        target_audience: storeData.target_audience,
+        menu: storeData.menu,
+        features: storeData.features,
+        price_range: storeData.price_range,
+        description: storeData.description,
+      };
+      console.log("10.6. 가게 정보 로드됨:", storeInfo.store_name);
+    } else {
+      console.log("10.7. 가게 정보 없음");
+    }
+
     // 설문 응답들 조회 (고객 정보 포함)
     console.log("11. 설문 응답들 조회...");
     const { data: responses, error: responsesError } = await supabase
@@ -146,6 +171,7 @@ export async function POST(
       survey: surveyData,
       questions: questions,
       responses: Array.from(customerResponses.values()),
+      storeInfo: storeInfo,
     };
 
     const analysis = await generateAIAnalysis(analysisData);
@@ -199,7 +225,7 @@ export async function POST(
 async function generateAIAnalysis(data: any) {
   console.log("AI 분석 함수 시작...");
 
-  const { survey, questions, responses } = data;
+  const { survey, questions, responses, storeInfo } = data;
   const totalResponses = responses.length;
 
   // 기본 통계 계산
@@ -262,6 +288,7 @@ async function generateAIAnalysis(data: any) {
     genders,
     ratings,
     textResponses,
+    storeInfo,
   });
 
   console.log("AI 분석 완료");
@@ -307,7 +334,8 @@ async function performGeminiAnalysis(data: any) {
     apiKey: process.env.GEMINI_API_KEY,
   });
 
-  const { survey, questions, responses, keyStats, textResponses } = data;
+  const { survey, questions, responses, keyStats, textResponses, storeInfo } =
+    data;
 
   // AI에게 보낼 분석 데이터 구성
   const analysisPrompt = `
@@ -322,7 +350,27 @@ async function performGeminiAnalysis(data: any) {
 
 ## 분석할 데이터:
 
-### 설문 정보:
+${
+  storeInfo
+    ? `### 가게 정보:
+- 가게명: ${storeInfo.store_name}
+- 업종: ${storeInfo.store_type_broad}
+- 위치: ${storeInfo.location}
+- 주 타겟층: ${storeInfo.target_audience || "정보 없음"}
+- 가격대: ${storeInfo.price_range || "정보 없음"}
+- 주요 메뉴: ${
+        storeInfo.menu
+          ?.map(
+            (item: any) => `${item.name} (${item.price?.toLocaleString()}원)`
+          )
+          .join(", ") || "정보 없음"
+      }
+- 가게 특징: ${storeInfo.features?.join(", ") || "정보 없음"}
+- 가게 소개: ${storeInfo.description || "정보 없음"}
+
+`
+    : ""
+}### 설문 정보:
 - 제목: ${survey.title}
 - 설명: ${survey.description}
 
@@ -365,11 +413,32 @@ ${res.answers
   .join("\n\n")}
 
 ## 분석 요구사항:
-1. **summary**: 전체 응답을 종합한 핵심 인사이트 (평점, 주요 고객층, 전반적 만족도 포함)
+${
+  storeInfo
+    ? `이 분석은 ${storeInfo.store_type_broad} 업종의 "${storeInfo.store_name}"에 대한 고객 피드백 분석입니다.
+가게의 업종, 타겟층, 가격대, 메뉴, 특징을 고려하여 업종별 특성에 맞는 구체적이고 실용적인 분석을 제공해주세요.
+
+`
+    : ""
+}1. **summary**: 전체 응답을 종합한 핵심 인사이트 (평점, 주요 고객층, 전반적 만족도${
+    storeInfo ? ", 업종별 특성" : ""
+  } 포함)
 2. **topPros**: 고객들이 가장 많이 언급하거나 만족하는 장점 3가지 (구체적이고 실행 가능한 표현)
 3. **topCons**: 고객들이 가장 많이 불만족하거나 개선을 원하는 단점 3가지 (구체적이고 실행 가능한 표현)
 4. **recommendations**: 단점을 개선하고 장점을 강화하기 위한 구체적이고 실행 가능한 방안들 (각 방안을 줄바꿈으로 구분)
 
+${
+  storeInfo
+    ? `
+특히 다음 사항들을 고려하여 분석해주세요:
+- ${storeInfo.store_type_broad} 업종의 일반적인 고객 기대사항
+- ${storeInfo.target_audience || "주요 고객층"}의 특성과 니즈
+- ${storeInfo.price_range || "가격대"} 수준에 맞는 서비스 품질 기준
+- 해당 지역(${storeInfo.location})의 시장 특성
+- 실제 메뉴와 가게 특징을 반영한 개선 방안
+`
+    : ""
+}
 응답은 반드시 유효한 JSON 형식이어야 하며, 한국어로 작성해주세요.
 비즈니스 관점에서 실용적이고 구체적인 분석을 제공해주세요.
 `;

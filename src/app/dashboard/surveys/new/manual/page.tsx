@@ -21,6 +21,8 @@ interface Question {
   question_type: "text" | "rating" | "single_choice" | "multiple_choice";
   choices_text: string[];
   isMultiSelect?: boolean;
+  rating_min_label?: string;
+  rating_max_label?: string;
 }
 
 export default function ManualSurveyPage() {
@@ -29,6 +31,7 @@ export default function ManualSurveyPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [requiredQuestions, setRequiredQuestions] = useState<any[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -50,6 +53,34 @@ export default function ManualSurveyPage() {
       }
 
       setUser(session.user);
+
+      // 사용자의 활성화된 필수질문들 조회
+      try {
+        const { data: userRequiredQuestions, error: requiredQuestionsError } =
+          await supabase
+            .from("user_required_questions")
+            .select(
+              `
+              required_questions!inner(*)
+            `
+            )
+            .eq("user_id", session.user.id)
+            .eq("is_enabled", true)
+            .eq("required_questions.is_active", true);
+
+        if (!requiredQuestionsError && userRequiredQuestions) {
+          const requiredQuestionsData = userRequiredQuestions
+            .map((urq: any) => urq.required_questions)
+            .filter((rq: any) => rq && rq.is_active)
+            .sort((a: any, b: any) => a.order_num - b.order_num);
+
+          setRequiredQuestions(requiredQuestionsData);
+          console.log("조회된 필수질문들:", requiredQuestionsData);
+        }
+      } catch (error) {
+        console.error("필수질문 조회 오류:", error);
+      }
+
       setLoadingUser(false);
     };
     fetchUser();
@@ -65,6 +96,8 @@ export default function ManualSurveyPage() {
         question_text: "",
         question_type: "text",
         choices_text: [],
+        rating_min_label: "",
+        rating_max_label: "",
       },
     ]);
   };
@@ -79,9 +112,18 @@ export default function ManualSurveyPage() {
       if (newType === "single_choice" || newType === "multiple_choice") {
         newQuestions[index].choices_text = ["", ""];
         newQuestions[index].isMultiSelect = newType === "multiple_choice";
+        newQuestions[index].rating_min_label = "";
+        newQuestions[index].rating_max_label = "";
+      } else if (newType === "rating") {
+        newQuestions[index].choices_text = [];
+        newQuestions[index].isMultiSelect = undefined;
+        newQuestions[index].rating_min_label = "매우 불만족";
+        newQuestions[index].rating_max_label = "매우 만족";
       } else {
         newQuestions[index].choices_text = [];
         newQuestions[index].isMultiSelect = undefined;
+        newQuestions[index].rating_min_label = "";
+        newQuestions[index].rating_max_label = "";
       }
     }
 
@@ -179,7 +221,7 @@ export default function ManualSurveyPage() {
 
       const { data: storeData, error: storeError } = await supabase
         .from("stores")
-        .select("id, name")
+        .select("id, store_name")
         .eq("user_id", user.id)
         .single();
 
@@ -196,7 +238,7 @@ export default function ManualSurveyPage() {
             .from("stores")
             .insert({
               user_id: user.id,
-              name: "기본 매장",
+              store_name: "기본 매장",
               business_registration_number: "000-00-00000",
               owner_contact: "000-0000-0000",
               store_type_broad: "기타",
@@ -251,40 +293,86 @@ export default function ManualSurveyPage() {
       const newSurveyId = surveyData[0].id;
       console.log("생성된 설문 ID:", newSurveyId);
 
-      // 3. 질문 생성
-      const questionsToInsert = questions.map((q, index) => {
-        const questionData = {
+      // 3. 사용자가 활성화한 필수질문들 조회 및 추가
+      let allQuestionsToInsert: any[] = [];
+
+      // 필수질문들을 먼저 추가 (앞쪽에 배치) - 활성화된 것만
+      if (requiredQuestions.length > 0) {
+        const requiredQuestionData = requiredQuestions.map(
+          (rq: any, index: number) => {
+            const questionData: any = {
+              survey_id: newSurveyId,
+              store_id: storeId,
+              question_text: rq.question_text,
+              question_type: rq.question_type,
+              options: rq.options || { maxRating: 5, required: true },
+              order_num: index + 1,
+              is_required: true,
+              required_question_id: rq.id,
+            };
+
+            // rating 질문인 경우 라벨 정보 추가
+            if (rq.question_type === "rating") {
+              questionData.rating_min_label =
+                rq.options?.rating_min_label || "매우 불만족";
+              questionData.rating_max_label =
+                rq.options?.rating_max_label || "매우 만족";
+            }
+
+            return questionData;
+          }
+        );
+
+        allQuestionsToInsert = [...requiredQuestionData];
+        console.log("추가된 필수질문들:", requiredQuestionData);
+      }
+
+      // 4. 사용자가 만든 질문들 추가 (필수질문 뒤에 배치)
+      const userQuestionsToInsert = questions.map((q, index) => {
+        const questionData: any = {
           survey_id: newSurveyId,
           store_id: storeId,
           question_text: q.question_text.trim(),
           question_type: q.question_type,
-          options: (() => {
-            if (
-              q.question_type === "single_choice" ||
-              q.question_type === "multiple_choice"
-            ) {
-              return {
-                choices_text: q.choices_text.filter((opt) => opt.trim()),
-                choice_ids: q.choices_text
-                  .filter((opt) => opt.trim())
-                  .map((_, idx) => `choice_${idx + 1}`),
-                isMultiSelect: q.question_type === "multiple_choice",
-              };
-            }
-            return null;
-          })(),
-          order_num: index + 1,
+          order_num: allQuestionsToInsert.length + index + 1, // 필수질문 뒤에 배치
+          is_required: false,
         };
-        console.log(`질문 ${index + 1} 데이터:`, questionData);
+
+        // 객관식 질문의 경우 options 추가
+        if (
+          q.question_type === "single_choice" ||
+          q.question_type === "multiple_choice"
+        ) {
+          questionData.options = {
+            choices_text: q.choices_text.filter((opt) => opt.trim()),
+            choice_ids: q.choices_text
+              .filter((opt) => opt.trim())
+              .map((_, idx) => `choice_${idx + 1}`),
+            isMultiSelect: q.question_type === "multiple_choice",
+          };
+        }
+
+        // 별점 질문의 경우 rating 라벨 추가
+        if (q.question_type === "rating") {
+          questionData.rating_min_label = q.rating_min_label || "매우 불만족";
+          questionData.rating_max_label = q.rating_max_label || "매우 만족";
+        }
+
+        console.log(`사용자 질문 ${index + 1} 데이터:`, questionData);
         return questionData;
       });
 
-      console.log("생성할 질문들:", questionsToInsert);
+      allQuestionsToInsert = [
+        ...allQuestionsToInsert,
+        ...userQuestionsToInsert,
+      ];
 
-      if (questionsToInsert.length > 0) {
+      console.log("생성할 모든 질문들:", allQuestionsToInsert);
+
+      if (allQuestionsToInsert.length > 0) {
         const { error: questionsError } = await supabase
           .from("questions")
-          .insert(questionsToInsert);
+          .insert(allQuestionsToInsert);
 
         if (questionsError) {
           // 설문 삭제 (롤백)
@@ -450,7 +538,7 @@ export default function ManualSurveyPage() {
               <div className="space-y-6">
                 <div className="flex justify-between items-center border-b border-gray-200 pb-2">
                   <h2 className="text-lg font-semibold text-gray-900">
-                    질문 목록 ({questions.length}개)
+                    질문 목록 ({requiredQuestions.length + questions.length}개)
                   </h2>
                   <button
                     type="button"
@@ -463,7 +551,26 @@ export default function ManualSurveyPage() {
                   </button>
                 </div>
 
-                {questions.length === 0 && (
+                {/* 필수질문 안내 */}
+                {requiredQuestions.length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-start">
+                      <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 mr-3" />
+                      <div>
+                        <h3 className="text-sm font-medium text-green-800">
+                          필수질문 ({requiredQuestions.length}개)
+                        </h3>
+                        <p className="text-sm text-green-700 mt-1">
+                          아래 필수질문들이 자동으로 설문에 포함됩니다. 수정이나
+                          삭제는 필수질문 설정에서 가능합니다.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 전체 질문이 없는 경우 */}
+                {requiredQuestions.length === 0 && questions.length === 0 && (
                   <div className="text-center py-12 bg-gray-50 rounded-lg">
                     <p className="text-gray-500 mb-4">
                       아직 추가된 질문이 없습니다
@@ -479,6 +586,53 @@ export default function ManualSurveyPage() {
                   </div>
                 )}
 
+                {/* 필수질문 표시 */}
+                {requiredQuestions.map((requiredQ, rqIndex) => (
+                  <div
+                    key={`required-${requiredQ.id}`}
+                    className="border border-green-200 rounded-lg p-4 bg-green-50"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-medium text-green-800">
+                          필수질문 #{rqIndex + 1}
+                        </h3>
+                        <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                          자동 포함
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="bg-white p-3 rounded border border-green-200">
+                        <div className="text-sm font-medium text-gray-900 mb-2">
+                          {requiredQ.question_text}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          유형:{" "}
+                          {requiredQ.question_type === "rating"
+                            ? "별점 평가"
+                            : requiredQ.question_type === "text"
+                            ? "주관식"
+                            : requiredQ.question_type === "single_choice"
+                            ? "객관식(단일)"
+                            : requiredQ.question_type === "multiple_choice"
+                            ? "객관식(다중)"
+                            : requiredQ.question_type}
+                          {requiredQ.question_type === "rating" &&
+                            requiredQ.options?.rating_min_label && (
+                              <span className="ml-4">
+                                척도: {requiredQ.options.rating_min_label} ~{" "}
+                                {requiredQ.options.rating_max_label}
+                              </span>
+                            )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* 사용자 추가 질문들 */}
                 {questions.map((question, qIndex) => (
                   <div
                     key={question.tempId}
@@ -486,7 +640,7 @@ export default function ManualSurveyPage() {
                   >
                     <div className="flex justify-between items-start mb-4">
                       <h3 className="text-sm font-medium text-gray-700">
-                        질문 #{qIndex + 1}
+                        추가질문 #{qIndex + 1}
                       </h3>
                       <button
                         type="button"
@@ -594,6 +748,61 @@ export default function ManualSurveyPage() {
                           ))}
                         </div>
                       )}
+
+                      {question.question_type === "rating" && (
+                        <div className="space-y-3 pl-4 border-l-2 border-yellow-300 bg-yellow-50 p-3 rounded-lg">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            별점 척도 라벨 설정
+                          </label>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                1점 기준 (최소값)
+                              </label>
+                              <input
+                                type="text"
+                                value={question.rating_min_label || ""}
+                                onChange={(e) =>
+                                  updateQuestion(
+                                    qIndex,
+                                    "rating_min_label",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="예: 매우 불만족, 매우 별로, 전혀 그렇지 않다"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                disabled={creating}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                5점 기준 (최대값)
+                              </label>
+                              <input
+                                type="text"
+                                value={question.rating_max_label || ""}
+                                onChange={(e) =>
+                                  updateQuestion(
+                                    qIndex,
+                                    "rating_max_label",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="예: 매우 만족, 매우 좋음, 매우 그렇다"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                disabled={creating}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="text-xs text-gray-500 mt-2">
+                            💡 별점 질문에서 1점과 5점의 의미를 명확히 하면 더
+                            정확한 응답을 받을 수 있습니다.
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -658,19 +867,82 @@ export default function ManualSurveyPage() {
                 {description && <p className="text-gray-600">{description}</p>}
               </div>
 
-              {questions.length === 0 ? (
+              {requiredQuestions.length === 0 && questions.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">
                   아직 추가된 질문이 없습니다.
                 </p>
               ) : (
                 <div className="space-y-6">
+                  {/* 필수질문 미리보기 */}
+                  {requiredQuestions.map((requiredQ, index) => (
+                    <div
+                      key={`preview-required-${requiredQ.id}`}
+                      className="border border-green-200 rounded-lg p-4 bg-green-50"
+                    >
+                      <div className="flex items-center space-x-2 mb-3">
+                        <p className="font-medium text-green-900">
+                          {index + 1}. {requiredQ.question_text}
+                        </p>
+                        <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                          필수
+                        </span>
+                      </div>
+
+                      {requiredQ.question_type === "text" && (
+                        <textarea
+                          className="w-full p-3 border border-green-300 rounded-lg bg-white"
+                          rows={3}
+                          placeholder="응답자가 답변을 입력하는 영역입니다."
+                          disabled
+                        />
+                      )}
+
+                      {requiredQ.question_type === "rating" && (
+                        <div>
+                          {/* 별점 척도 라벨 표시 */}
+                          {(requiredQ.options?.rating_min_label ||
+                            requiredQ.options?.rating_max_label) && (
+                            <div className="flex justify-between items-center mb-3 px-2 text-sm text-green-600">
+                              <span className="font-medium">
+                                1점:{" "}
+                                {requiredQ.options?.rating_min_label ||
+                                  "매우 불만족"}
+                              </span>
+                              <span className="font-medium">
+                                5점:{" "}
+                                {requiredQ.options?.rating_max_label ||
+                                  "매우 만족"}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center space-x-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span
+                                key={star}
+                                className="text-2xl text-yellow-400"
+                              >
+                                ★
+                              </span>
+                            ))}
+                            <span className="ml-3 text-sm text-gray-500">
+                              (1-5점)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* 사용자 추가 질문 미리보기 */}
                   {questions.map((question, index) => (
                     <div
                       key={question.tempId}
                       className="border border-gray-200 rounded-lg p-4"
                     >
                       <p className="font-medium text-gray-900 mb-3">
-                        {index + 1}. {question.question_text || "질문 내용"}
+                        {requiredQuestions.length + index + 1}.{" "}
+                        {question.question_text || "질문 내용"}
                       </p>
 
                       {question.question_type === "text" && (
@@ -683,18 +955,34 @@ export default function ManualSurveyPage() {
                       )}
 
                       {question.question_type === "rating" && (
-                        <div className="flex items-center space-x-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <span
-                              key={star}
-                              className="text-2xl text-yellow-400"
-                            >
-                              ★
+                        <div>
+                          {/* 별점 척도 라벨 표시 */}
+                          {(question.rating_min_label ||
+                            question.rating_max_label) && (
+                            <div className="flex justify-between items-center mb-3 px-2 text-sm text-gray-600">
+                              <span className="font-medium">
+                                1점:{" "}
+                                {question.rating_min_label || "매우 불만족"}
+                              </span>
+                              <span className="font-medium">
+                                5점: {question.rating_max_label || "매우 만족"}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center space-x-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span
+                                key={star}
+                                className="text-2xl text-yellow-400"
+                              >
+                                ★
+                              </span>
+                            ))}
+                            <span className="ml-3 text-sm text-gray-500">
+                              (1-5점)
                             </span>
-                          ))}
-                          <span className="ml-3 text-sm text-gray-500">
-                            (1-5점)
-                          </span>
+                          </div>
                         </div>
                       )}
 

@@ -95,9 +95,9 @@ export default function SurveyResponsesPage() {
   const [responsesData, setResponsesData] = useState<ResponseData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
   const [selectedAgeGroup, setSelectedAgeGroup] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
 
   // 페이지네이션 상태 추가
   const [currentPage, setCurrentPage] = useState(1);
@@ -332,17 +332,50 @@ export default function SurveyResponsesPage() {
     return "응답 없음";
   };
 
+  // 필터링된 응답 데이터
   const filteredResponsesData = responsesData.filter((item) => {
-    const matchesSearch = item.customer_info.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
+    // 시간대별 필터링
+    const responseTime = new Date(item.responses[0]?.created_at || "");
+    const hour = responseTime.getHours();
+    let matchesTimeSlot = true;
+
+    if (selectedTimeSlot) {
+      switch (selectedTimeSlot) {
+        case "morning":
+          matchesTimeSlot = hour >= 6 && hour < 12;
+          break;
+        case "lunch":
+          matchesTimeSlot = hour >= 12 && hour < 14;
+          break;
+        case "afternoon":
+          matchesTimeSlot = hour >= 14 && hour < 18;
+          break;
+        case "evening":
+          matchesTimeSlot = hour >= 18 && hour < 22;
+          break;
+        case "night":
+          matchesTimeSlot = hour >= 22 || hour < 6;
+          break;
+        default:
+          matchesTimeSlot = true;
+      }
+    }
+
     const matchesAgeGroup =
       !selectedAgeGroup || item.customer_info.age_group === selectedAgeGroup;
     const matchesGender =
       !selectedGender || item.customer_info.gender === selectedGender;
 
-    return matchesSearch && matchesAgeGroup && matchesGender;
+    return matchesTimeSlot && matchesAgeGroup && matchesGender;
   });
+
+  // 유니크한 연령대와 성별 목록
+  const uniqueAgeGroups = Array.from(
+    new Set(responsesData.map((item) => item.customer_info.age_group))
+  ).sort();
+  const uniqueGenders = Array.from(
+    new Set(responsesData.map((item) => item.customer_info.gender))
+  ).sort();
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(filteredResponsesData.length / itemsPerPage);
@@ -357,22 +390,14 @@ export default function SurveyResponsesPage() {
   // 필터 변경 시 페이지 리셋
   const handleFilterChange = (filterType: string, value: string) => {
     setCurrentPage(1);
-    if (filterType === "search") {
-      setSearchTerm(value);
+    if (filterType === "timeSlot") {
+      setSelectedTimeSlot(value);
     } else if (filterType === "ageGroup") {
       setSelectedAgeGroup(value);
     } else if (filterType === "gender") {
       setSelectedGender(value);
     }
   };
-
-  // 고유한 연령대와 성별 추출
-  const uniqueAgeGroups = [
-    ...new Set(responsesData.map((item) => item.customer_info.age_group)),
-  ];
-  const uniqueGenders = [
-    ...new Set(responsesData.map((item) => item.customer_info.gender)),
-  ];
 
   if (loading) {
     return (
@@ -481,7 +506,7 @@ export default function SurveyResponsesPage() {
 
         {/* AI 분석 섹션 */}
         <div className="bg-gradient-to-r from-purple-50 via-blue-50 to-indigo-50 rounded-2xl shadow-lg border border-purple-200 p-6 mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 mb-6">
+          <div className="flex flex-col space-y-4 lg:space-y-0 mb-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl">
                 <Bot className="h-6 w-6 text-white" />
@@ -495,33 +520,53 @@ export default function SurveyResponsesPage() {
                 </p>
               </div>
             </div>
-            <div className="flex space-x-3">
-              {aiStatistics.length > 0 && (
-                <button
-                  onClick={() => setShowAnalysisHistory(true)}
-                  className="flex items-center px-4 py-2 text-sm border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors"
-                >
-                  <History className="h-4 w-4 mr-2" />
-                  분석 이력
-                </button>
-              )}
-              <button
-                onClick={generateAIAnalysis}
-                disabled={isAnalyzing || responsesData.length === 0}
-                className="flex items-center px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    AI 분석 중...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-2" />새 AI 분석 생성
-                  </>
+            {latestAiAnalysis ? (
+              <div className="flex space-x-3">
+                {aiStatistics.length > 0 && (
+                  <button
+                    onClick={() => setShowAnalysisHistory(true)}
+                    className="flex items-center px-4 py-2 text-sm border border-purple-300 text-purple-700 rounded-lg hover:bg-white transition-colors"
+                  >
+                    <History className="h-4 w-4 mr-2" />
+                    분석 이력
+                  </button>
                 )}
-              </button>
-            </div>
+                <button
+                  onClick={generateAIAnalysis}
+                  disabled={isAnalyzing || responsesData.length === 0}
+                  className="flex items-center px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      AI 분석 중...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />새 AI 분석 생성
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Bot className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  AI 분석 결과가 없습니다
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  응답 데이터를 AI가 분석하여 인사이트를 제공합니다.
+                </p>
+                <button
+                  onClick={generateAIAnalysis}
+                  disabled={responsesData.length === 0}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                >
+                  <Sparkles className="h-4 w-4 mr-2 inline" />첫 번째 AI 분석
+                  시작하기
+                </button>
+              </div>
+            )}
           </div>
 
           {latestAiAnalysis ? (
@@ -692,21 +737,7 @@ export default function SurveyResponsesPage() {
                 )}
               </div>
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <Bot className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-500 mb-4">
-                아직 AI 분석 결과가 없습니다.
-              </p>
-              <button
-                onClick={generateAIAnalysis}
-                disabled={responsesData.length === 0}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                첫 번째 AI 분석 시작하기
-              </button>
-            </div>
-          )}
+          ) : null}
         </div>
 
         {/* 응답 목록 */}
@@ -737,27 +768,27 @@ export default function SurveyResponsesPage() {
             {/* 검색 및 필터 */}
             <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="응답자 이름으로 검색..."
-                      value={searchTerm}
-                      onChange={(e) =>
-                        handleFilterChange("search", e.target.value)
-                      }
-                      className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-1">
+                  <select
+                    value={selectedTimeSlot}
+                    onChange={(e) =>
+                      handleFilterChange("timeSlot", e.target.value)
+                    }
+                    className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white shadow-sm flex-1"
+                  >
+                    <option value="">모든 시간대</option>
+                    <option value="morning">오전 (06:00-12:00)</option>
+                    <option value="lunch">점심 (12:00-14:00)</option>
+                    <option value="afternoon">오후 (14:00-18:00)</option>
+                    <option value="evening">저녁 (18:00-22:00)</option>
+                    <option value="night">밤 (22:00-06:00)</option>
+                  </select>
                   <select
                     value={selectedAgeGroup}
                     onChange={(e) =>
                       handleFilterChange("ageGroup", e.target.value)
                     }
-                    className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white shadow-sm min-w-[120px]"
+                    className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white shadow-sm flex-1"
                   >
                     <option value="">모든 연령대</option>
                     {uniqueAgeGroups.map((ageGroup) => (
@@ -771,7 +802,7 @@ export default function SurveyResponsesPage() {
                     onChange={(e) =>
                       handleFilterChange("gender", e.target.value)
                     }
-                    className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white shadow-sm min-w-[100px]"
+                    className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white shadow-sm flex-1"
                   >
                     <option value="">모든 성별</option>
                     {uniqueGenders.map((gender) => (
@@ -780,20 +811,20 @@ export default function SurveyResponsesPage() {
                       </option>
                     ))}
                   </select>
-                  {(searchTerm || selectedAgeGroup || selectedGender) && (
-                    <button
-                      onClick={() => {
-                        setSearchTerm("");
-                        setSelectedAgeGroup("");
-                        setSelectedGender("");
-                        setCurrentPage(1);
-                      }}
-                      className="px-4 py-3 text-sm text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
-                    >
-                      초기화
-                    </button>
-                  )}
                 </div>
+                {(selectedTimeSlot || selectedAgeGroup || selectedGender) && (
+                  <button
+                    onClick={() => {
+                      setSelectedTimeSlot("");
+                      setSelectedAgeGroup("");
+                      setSelectedGender("");
+                      setCurrentPage(1);
+                    }}
+                    className="px-4 py-3 text-sm text-gray-600 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
+                  >
+                    초기화
+                  </button>
+                )}
               </div>
             </div>
 
@@ -803,7 +834,7 @@ export default function SurveyResponsesPage() {
                 <div className="flex items-center space-x-3">
                   <h2 className="text-xl font-bold text-gray-900">응답 목록</h2>
                   <div className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
-                    {searchTerm || selectedAgeGroup || selectedGender
+                    {selectedTimeSlot || selectedAgeGroup || selectedGender
                       ? `${filteredResponsesData.length}개 / 전체 ${responsesData.length}개`
                       : `${responsesData.length}개`}
                   </div>
@@ -828,7 +859,7 @@ export default function SurveyResponsesPage() {
                 </p>
                 <button
                   onClick={() => {
-                    setSearchTerm("");
+                    setSelectedTimeSlot("");
                     setSelectedAgeGroup("");
                     setSelectedGender("");
                     setCurrentPage(1);
@@ -840,146 +871,96 @@ export default function SurveyResponsesPage() {
               </div>
             ) : (
               <>
-                {/* 카드 형태의 응답 목록 */}
-                <div className="divide-y divide-gray-100">
-                  {currentPageData.map((responseData, index) => (
-                    <div
-                      key={responseData.customer_info.id}
-                      className="p-6 bg-white border-l-4 border-blue-500 relative"
-                    >
-                      {/* 응답자 구분을 위한 백그라운드 */}
-                      <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-50 to-indigo-50"></div>
-
-                      {/* 응답자 정보 헤더 */}
-                      <div className="flex items-center justify-between mb-6 bg-gray-50 -mx-6 -mt-6 px-6 pt-8 pb-4 border-b border-gray-200">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
-                            <User className="h-7 w-7 text-white" />
-                          </div>
-                          <div>
-                            <div className="flex items-center space-x-3 mb-1">
-                              <h3 className="text-xl font-bold text-gray-900">
+                {/* 응답 목록 - 그리드 형태 */}
+                <div className="p-6">
+                  <div className="grid gap-6">
+                    {currentPageData.map((responseData, index) => (
+                      <div
+                        key={responseData.customer_info.id}
+                        className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-all duration-200"
+                      >
+                        {/* 응답자 정보 헤더 */}
+                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                              <User className="h-5 w-5 text-gray-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-gray-900">
                                 {responseData.customer_info.name}
                               </h3>
-                              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full">
-                                응답자 #{startIndex + index + 1}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-3 text-sm text-gray-600">
-                              <span className="px-2 py-1 bg-white border border-gray-200 rounded-md">
-                                {responseData.customer_info.age_group}
-                              </span>
-                              <span className="px-2 py-1 bg-white border border-gray-200 rounded-md">
-                                {responseData.customer_info.gender}
-                              </span>
+                              <div className="flex items-center space-x-2 text-sm text-gray-500">
+                                <span>
+                                  {responseData.customer_info.age_group}
+                                </span>
+                                <span>•</span>
+                                <span>{responseData.customer_info.gender}</span>
+                              </div>
                             </div>
                           </div>
+                          <div className="text-sm text-gray-500">
+                            {new Date(
+                              responseData.responses[0]?.created_at || ""
+                            ).toLocaleDateString("ko-KR")}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
-                          응답일:{" "}
-                          {new Date(
-                            responseData.responses[0]?.created_at || ""
-                          ).toLocaleDateString("ko-KR")}
-                        </div>
-                      </div>
 
-                      {/* 모든 질문과 응답 */}
-                      <div className="grid gap-5 mt-6">
-                        {questions.map((question) => {
-                          const response = responseData.responses.find(
-                            (r) => r.question_id === question.id
-                          );
+                        {/* 질문과 응답 - PC에서는 2-3열 그리드 */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {questions.map((question) => {
+                            const response = responseData.responses.find(
+                              (r) => r.question_id === question.id
+                            );
 
-                          return (
-                            <div
-                              key={question.id}
-                              className="bg-white rounded-xl p-6 border-2 border-gray-100 hover:border-gray-200 transition-colors shadow-sm"
-                            >
-                              <div className="mb-4">
-                                <div className="flex items-start space-x-3">
-                                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                                    <span className="text-sm font-bold text-blue-600">
-                                      Q{question.order_num}
-                                    </span>
-                                  </div>
-                                  <h4 className="font-semibold text-gray-900 leading-relaxed">
-                                    {question.question_text}
-                                  </h4>
-                                </div>
-                              </div>
+                            return (
+                              <div
+                                key={question.id}
+                                className="bg-gray-50 rounded-lg p-4"
+                              >
+                                <h4 className="text-sm font-medium text-gray-900 mb-3 leading-tight">
+                                  Q{question.order_num}.{" "}
+                                  {question.question_text}
+                                </h4>
 
-                              <div className="ml-11">
                                 {!response ? (
-                                  <div className="flex items-center space-x-2 text-gray-400">
-                                    <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
-                                    <p className="italic text-sm">응답 없음</p>
-                                  </div>
+                                  <p className="text-sm text-gray-400 italic">
+                                    응답 없음
+                                  </p>
                                 ) : (
                                   <div>
                                     {question.question_type === "text" && (
-                                      <div className="bg-gray-50 border-l-4 border-gray-400 rounded-lg p-4">
-                                        <p className="text-gray-800 leading-relaxed font-medium">
-                                          "
-                                          {response.response_text ||
-                                            "응답 없음"}
-                                          "
-                                        </p>
-                                      </div>
+                                      <p className="text-sm text-gray-800 bg-white p-3 rounded border-l-2 border-gray-400">
+                                        "{response.response_text || "응답 없음"}
+                                        "
+                                      </p>
                                     )}
 
                                     {question.question_type ===
                                       "single_choice" && (
-                                      <div className="flex items-center space-x-3 bg-green-50 p-3 rounded-lg">
-                                        <div className="w-4 h-4 bg-green-500 rounded-full flex-shrink-0"></div>
-                                        <span className="text-gray-800 font-medium">
-                                          {response.selected_option ||
-                                            "선택 없음"}
-                                        </span>
+                                      <div className="text-sm text-gray-800 bg-white p-3 rounded">
+                                        {response.selected_option ||
+                                          "선택 없음"}
                                       </div>
                                     )}
 
                                     {question.question_type ===
                                       "multiple_choice" && (
-                                      <div className="space-y-2 bg-green-50 p-3 rounded-lg">
+                                      <div className="text-sm text-gray-800 bg-white p-3 rounded">
                                         {response.selected_options &&
-                                        Array.isArray(
-                                          response.selected_options
-                                        ) ? (
-                                          response.selected_options.map(
-                                            (option, idx) => (
-                                              <div
-                                                key={idx}
-                                                className="flex items-center space-x-3"
-                                              >
-                                                <div className="w-4 h-4 bg-green-500 rounded-full flex-shrink-0"></div>
-                                                <span className="text-gray-800">
-                                                  {option}
-                                                </span>
-                                              </div>
-                                            )
-                                          )
-                                        ) : (
-                                          <div className="flex items-center space-x-3">
-                                            <div className="w-4 h-4 bg-green-500 rounded-full flex-shrink-0"></div>
-                                            <span className="text-gray-800">
-                                              {formatResponse(
-                                                response,
-                                                question
-                                              )}
-                                            </span>
-                                          </div>
-                                        )}
+                                        Array.isArray(response.selected_options)
+                                          ? response.selected_options.join(", ")
+                                          : formatResponse(response, question)}
                                       </div>
                                     )}
 
                                     {question.question_type === "rating" && (
-                                      <div className="bg-yellow-50 p-4 rounded-lg">
-                                        <div className="flex items-center space-x-4">
+                                      <div className="bg-white p-3 rounded">
+                                        <div className="flex items-center space-x-2">
                                           <div className="flex space-x-1">
                                             {[1, 2, 3, 4, 5].map((star) => (
                                               <Star
                                                 key={star}
-                                                size={24}
+                                                size={16}
                                                 className={`${
                                                   star <= (response.rating || 0)
                                                     ? "text-yellow-400 fill-current"
@@ -988,8 +969,8 @@ export default function SurveyResponsesPage() {
                                               />
                                             ))}
                                           </div>
-                                          <span className="text-xl font-bold text-gray-900">
-                                            {response.rating}/5점
+                                          <span className="text-sm font-medium text-gray-900">
+                                            {response.rating}/5
                                           </span>
                                         </div>
                                       </div>
@@ -997,12 +978,12 @@ export default function SurveyResponsesPage() {
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
                 {/* 페이지네이션 */}
