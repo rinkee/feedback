@@ -593,9 +593,9 @@ export default function SurveyResponsesPage() {
                     </h4>
                   </div>
                   <p className="text-2xl font-bold text-yellow-600">
-                    {latestAiAnalysis.average_rating
+                    {latestAiAnalysis.average_rating !== undefined && latestAiAnalysis.average_rating !== null
                       ? `${latestAiAnalysis.average_rating}점`
-                      : "N/A"}
+                      : "0점"}
                   </p>
                 </div>
 
