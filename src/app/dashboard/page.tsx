@@ -594,7 +594,7 @@ export default function DashboardPage() {
                               height: `${Math.max(data.percentage, 5)}%`,
                             }}
                           ></div>
-                          <span className="text-xs text-gray-500 mt-2 truncate w-8 text-center">
+                          <span className="text-xs text-gray-500 mt-2 w-12 text-center">
                             {data.date}
                           </span>
                         </div>
@@ -671,7 +671,7 @@ export default function DashboardPage() {
                               className="w-4 bg-gradient-to-t from-green-500 to-green-400 rounded-t"
                               style={{ height: `${Math.max(height, 5)}%` }}
                             ></div>
-                            <span className="text-xs text-gray-500 mt-2 truncate w-8 text-center">
+                            <span className="text-xs text-gray-500 mt-2 w-12 text-center">
                               {data.date}
                             </span>
                           </div>
