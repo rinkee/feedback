@@ -877,25 +877,24 @@ export default function DashboardPage() {
                           ...responseTrendData.map((d) => d.count),
                           1
                         );
-                        const step = Math.ceil(maxCount / 4);
                         const yLabels = Array.from(
                           { length: 5 },
-                          (_, i) => i * step
+                          (_, i) => Math.round((maxCount * i) / 4)
                         );
 
                         return yLabels.map((value) => (
                           <g key={value}>
                             <line
                               x1="30"
-                              y1={`${100 - (value / (step * 4)) * 100}%`}
+                              y1={`${100 - (value / maxCount) * 100}%`}
                               x2="100%"
-                              y2={`${100 - (value / (step * 4)) * 100}%`}
+                              y2={`${100 - (value / maxCount) * 100}%`}
                               stroke="#e5e7eb"
                               strokeDasharray="2,2"
                             />
                             <text
                               x="25"
-                              y={`${100 - (value / (step * 4)) * 100}%`}
+                              y={`${100 - (value / maxCount) * 100}%`}
                               textAnchor="end"
                               className="text-xs"
                               fill="#6b7280"
