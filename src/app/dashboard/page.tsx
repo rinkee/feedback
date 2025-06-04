@@ -605,7 +605,7 @@ export default function DashboardPage() {
                                 </div>
                               ) : (
                                 <p className="bg-white border rounded-lg px-3 py-2 text-sm">
-                                  "{response.response_text || "응답 없음"}"
+                                  {response.response_text || "응답 없음"}
                                 </p>
                               )}
                             </div>
