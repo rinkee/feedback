@@ -676,7 +676,10 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {/* 차트 영역 */}
                   <div className="h-48 relative">
-                    <svg className="w-full h-full overflow-visible">
+                    <svg
+                      className="w-full h-full overflow-visible"
+                      viewBox="0 0 100 100"
+                    >
                       <defs>
                         <linearGradient
                           id="revisitGradient"
@@ -849,7 +852,10 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {/* 차트 영역 */}
                   <div className="h-48 relative">
-                    <svg className="w-full h-full overflow-visible">
+                    <svg
+                      className="w-full h-full overflow-visible"
+                      viewBox="0 0 100 100"
+                    >
                       <defs>
                         <linearGradient
                           id="responseGradient"
