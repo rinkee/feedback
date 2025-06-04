@@ -676,7 +676,10 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {/* 차트 영역 */}
                   <div className="h-48 relative">
-                    <svg className="w-full h-full overflow-visible">
+                    <svg
+                      className="w-full h-full overflow-visible"
+                      viewBox="0 0 100 100"
+                    >
                       <defs>
                         <linearGradient
                           id="revisitGradient"
@@ -703,15 +706,15 @@ export default function DashboardPage() {
                         <g key={value}>
                           <line
                             x1="30"
-                            y1={`${100 - value}%`}
-                            x2="100%"
-                            y2={`${100 - value}%`}
+                            y1={100 - value}
+                            x2="100"
+                            y2={100 - value}
                             stroke="#e5e7eb"
                             strokeDasharray="2,2"
                           />
                           <text
                             x="25"
-                            y={`${100 - value}%`}
+                            y={100 - value}
                             textAnchor="end"
                             className="text-xs"
                             fill="#6b7280"
@@ -730,11 +733,11 @@ export default function DashboardPage() {
                               const x =
                                 30 +
                                 (index / (revisitTrendData.length - 1)) * 70;
-                              const y = `${100 - data.percentage}%`;
+                              const y = 100 - data.percentage;
                               if (index === 0) return `M ${x} ${y}`;
                               return `L ${x} ${y}`;
                             })
-                            .join(" ") + ` L ${100} 100% L 30 100% Z`
+                            .join(" ") + ` L 100 100 L 30 100 Z`
                         }
                         fill="url(#revisitGradient)"
                       />
@@ -746,7 +749,7 @@ export default function DashboardPage() {
                             const x =
                               30 + (index / (revisitTrendData.length - 1)) * 70;
                             const y = 100 - data.percentage;
-                            return `${x},${y}%`;
+                            return `${x},${y}`;
                           })
                           .join(" ")}
                         fill="none"
@@ -758,7 +761,7 @@ export default function DashboardPage() {
                       {revisitTrendData.map((data, index) => {
                         const x =
                           30 + (index / (revisitTrendData.length - 1)) * 70;
-                        const y = `${100 - data.percentage}%`;
+                        const y = 100 - data.percentage;
                         return (
                           <g key={index}>
                             <circle
@@ -790,7 +793,7 @@ export default function DashboardPage() {
                         <text
                           key={index}
                           x={30 + (index / (revisitTrendData.length - 1)) * 70}
-                          y="95%"
+                          y={95}
                           textAnchor="middle"
                           className="text-xs"
                           fill="#6b7280"
@@ -849,7 +852,10 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   {/* 차트 영역 */}
                   <div className="h-48 relative">
-                    <svg className="w-full h-full overflow-visible">
+                    <svg
+                      className="w-full h-full overflow-visible"
+                      viewBox="0 0 100 100"
+                    >
                       <defs>
                         <linearGradient
                           id="responseGradient"
@@ -877,25 +883,24 @@ export default function DashboardPage() {
                           ...responseTrendData.map((d) => d.count),
                           1
                         );
-                        const step = Math.ceil(maxCount / 4);
                         const yLabels = Array.from(
                           { length: 5 },
-                          (_, i) => i * step
+                          (_, i) => Math.round((maxCount * i) / 4)
                         );
 
                         return yLabels.map((value) => (
                           <g key={value}>
                             <line
                               x1="30"
-                              y1={`${100 - (value / (step * 4)) * 100}%`}
-                              x2="100%"
-                              y2={`${100 - (value / (step * 4)) * 100}%`}
+                              y1={100 - (value / maxCount) * 100}
+                              x2="100"
+                              y2={100 - (value / maxCount) * 100}
                               stroke="#e5e7eb"
                               strokeDasharray="2,2"
                             />
                             <text
                               x="25"
-                              y={`${100 - (value / (step * 4)) * 100}%`}
+                              y={100 - (value / maxCount) * 100}
                               textAnchor="end"
                               className="text-xs"
                               fill="#6b7280"
@@ -920,10 +925,10 @@ export default function DashboardPage() {
                                 30 +
                                 (index / (responseTrendData.length - 1)) * 70;
                               const y = 100 - (data.count / maxCount) * 100;
-                              if (index === 0) return `M ${x} ${y}%`;
-                              return `L ${x} ${y}%`;
+                              if (index === 0) return `M ${x} ${y}`;
+                              return `L ${x} ${y}`;
                             })
-                            .join(" ") + ` L ${100} 100% L 30 100% Z`
+                            .join(" ") + ` L 100 100 L 30 100 Z`
                         }
                         fill="url(#responseGradient)"
                       />
@@ -940,7 +945,7 @@ export default function DashboardPage() {
                               30 +
                               (index / (responseTrendData.length - 1)) * 70;
                             const y = 100 - (data.count / maxCount) * 100;
-                            return `${x},${y}%`;
+                            return `${x},${y}`;
                           })
                           .join(" ")}
                         fill="none"
@@ -956,7 +961,7 @@ export default function DashboardPage() {
                         );
                         const x =
                           30 + (index / (responseTrendData.length - 1)) * 70;
-                        const y = `${100 - (data.count / maxCount) * 100}%`;
+                        const y = 100 - (data.count / maxCount) * 100;
                         return (
                           <g key={index}>
                             <circle
@@ -988,7 +993,7 @@ export default function DashboardPage() {
                         <text
                           key={index}
                           x={30 + (index / (responseTrendData.length - 1)) * 70}
-                          y="95%"
+                          y={95}
                           textAnchor="middle"
                           className="text-xs"
                           fill="#6b7280"
