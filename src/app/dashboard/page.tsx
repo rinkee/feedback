@@ -302,8 +302,10 @@ export default function DashboardPage() {
         for (let i = 6; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
+          date.setHours(0, 0, 0, 0); // 하루의 시작 시각 고정
           const nextDate = new Date(date);
           nextDate.setDate(nextDate.getDate() + 1);
+          nextDate.setHours(0, 0, 0, 0); // 다음 날 시작 시각
 
           // 해당 날짜의 재방문의사(revisit_intention) 응답 가져오기
           const { data: revisitResponses } = await supabase
@@ -348,8 +350,10 @@ export default function DashboardPage() {
         for (let i = 6; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
+          date.setHours(0, 0, 0, 0); // 하루의 시작 시각 고정
           const nextDate = new Date(date);
           nextDate.setDate(nextDate.getDate() + 1);
+          nextDate.setHours(0, 0, 0, 0); // 다음 날 시작 시각
 
           // 해당 날짜의 전체 응답 수 (customer_info 기준으로 중복 제거)
           const { data: dayResponses } = await supabase
