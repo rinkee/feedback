@@ -93,21 +93,6 @@ interface RatingDistribution {
   percentage: number;
 }
 
-// 기본으로 최근 7일의 0% 데이터를 생성해 그래프가 비어 보이지 않도록 함
-const getDefaultRevisitData = (): RevisitTrendData[] => {
-  const data: RevisitTrendData[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    data.push({
-      date: date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" }),
-      percentage: 0,
-      count: 0,
-    });
-  }
-  return data;
-};
-
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -115,8 +100,9 @@ export default function DashboardPage() {
   const [dashboardStats, setDashboardStats] = useState({
     totalCustomers: 0,
     recentCustomerCount: 0,
-    avgRating: 0,
+    avgResponseTime: 0,
     unreadCount: 0,
+    avgRating: 0,
   });
   const [recentResponses, setRecentResponses] = useState<RecentResponse[]>([]);
   const [latestAIStats, setLatestAIStats] = useState<AIStatistic | null>(null);
@@ -124,13 +110,42 @@ export default function DashboardPage() {
     useState<ResponseModalData | null>(null);
   const [showResponseModal, setShowResponseModal] = useState(false);
 
-  // 차트 데이터 상태
+  // 차트 데이터 상태 (디폴트 7일 0값 데이터로 차트 영역 표시)
   const [revisitTrendData, setRevisitTrendData] = useState<RevisitTrendData[]>(
-    getDefaultRevisitData()
+    () => {
+      const init: RevisitTrendData[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        init.push({
+          date: date.toLocaleDateString("ko-KR", {
+            month: "short",
+            day: "numeric",
+          }),
+          percentage: 0,
+          count: 0,
+        });
+      }
+      return init;
+    }
   );
   const [responseTrendData, setResponseTrendData] = useState<
     ResponseTrendData[]
-  >([]);
+  >(() => {
+    const init: ResponseTrendData[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      init.push({
+        date: date.toLocaleDateString("ko-KR", {
+          month: "short",
+          day: "numeric",
+        }),
+        count: 0,
+      });
+    }
+    return init;
+  });
   const [ratingDistribution, setRatingDistribution] = useState<
     RatingDistribution[]
   >([]);
@@ -187,9 +202,34 @@ export default function DashboardPage() {
             );
             const recentCustomerCount = recentCustomers.length;
 
+            // 3) 평균 응답 소요 시간 (고객별로 created_at ~ 마지막 응답 created_at 평균)
+            let avgResponseTime = 0;
+            if (allCustomers && allCustomers.length > 0) {
+              let totalTime = 0;
+              let countTime = 0;
+              for (const customer of allCustomers) {
+                const { data: customerResponses } = await supabase
+                  .from("responses")
+                  .select("created_at")
+                  .eq("survey_id", activeSurveyData.id)
+                  .eq("customer_info_id", customer.id)
+                  .order("created_at", { ascending: true });
+                if (customerResponses && customerResponses.length > 0) {
+                  const start = new Date(customer.created_at).getTime();
+                  const end = new Date(
+                    customerResponses[customerResponses.length - 1].created_at
+                  ).getTime();
+                  if (end > start) {
+                    totalTime += (end - start) / 1000; // 초 단위
+                    countTime++;
+                  }
+                }
+              }
+              avgResponseTime =
+                countTime > 0 ? Math.round(totalTime / countTime) : 0;
+            }
 
-
-            // 3) 읽지 않은 응답이 있는 고객 수(NEW)
+            // 4) 읽지 않은 응답이 있는 고객 수(NEW)
             const { data: unreadResponses } = await supabase
               .from("responses")
               .select("customer_info_id")
@@ -200,8 +240,36 @@ export default function DashboardPage() {
             );
             const unreadCount = unreadCustomerSet.size;
 
-            // AI 통계에서 평균 평점 가져오기
+            // 5) 평균 평점 (전반적 만족도)
+            const { data: overallRatings } = await supabase
+              .from("responses")
+              .select("rating")
+              .eq("survey_id", activeSurveyData.id)
+              .eq("required_question_category", "overall_satisfaction")
+              .not("rating", "is", null);
+
+            console.log("Overall satisfaction ratings:", overallRatings);
+
             let avgRating = 0;
+            if (overallRatings && overallRatings.length > 0) {
+              const total = overallRatings.reduce(
+                (sum, r) => sum + r.rating,
+                0
+              );
+              avgRating = total / overallRatings.length;
+            }
+
+            console.log("Average rating calculated:", avgRating);
+
+            setDashboardStats({
+              totalCustomers,
+              recentCustomerCount,
+              avgResponseTime,
+              unreadCount,
+              avgRating,
+            });
+
+            // AI 통계 최근 데이터 가져오기
             const { data: aiStatsData } = await supabase
               .from("ai_statistics")
               .select("*")
@@ -210,15 +278,7 @@ export default function DashboardPage() {
               .limit(1);
             if (aiStatsData && aiStatsData.length > 0) {
               setLatestAIStats(aiStatsData[0]);
-              avgRating = aiStatsData[0].average_rating ?? 0;
             }
-
-            setDashboardStats({
-              totalCustomers,
-              recentCustomerCount,
-              avgRating,
-              unreadCount,
-            });
 
             // 최근 응답 등 기존 로직 유지
             const { data: responsesData } = await supabase
@@ -294,12 +354,28 @@ export default function DashboardPage() {
       try {
         const trendData: RevisitTrendData[] = [];
         for (let i = 6; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          date.setHours(0, 0, 0, 0); // 하루의 시작 시각 고정
-          const nextDate = new Date(date);
-          nextDate.setDate(nextDate.getDate() + 1);
-          nextDate.setHours(0, 0, 0, 0); // 다음 날 시작 시각
+          // UTC 기준으로 날짜 계산
+          const now = new Date();
+          const date = new Date(
+            Date.UTC(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() - i,
+              0,
+              0,
+              0
+            )
+          );
+          const nextDate = new Date(
+            Date.UTC(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() - i + 1,
+              0,
+              0,
+              0
+            )
+          );
 
           // 해당 날짜의 재방문의사(revisit_intention) 응답 가져오기
           const { data: revisitResponses } = await supabase
@@ -310,6 +386,11 @@ export default function DashboardPage() {
             .not("rating", "is", null)
             .gte("created_at", date.toISOString())
             .lt("created_at", nextDate.toISOString());
+
+          console.log(
+            `Revisit responses for ${date.toISOString()} to ${nextDate.toISOString()}:`,
+            revisitResponses
+          );
 
           let percentage = 0;
           const totalCount = revisitResponses?.length || 0;
@@ -342,32 +423,54 @@ export default function DashboardPage() {
       try {
         const trendData: ResponseTrendData[] = [];
         for (let i = 6; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          date.setHours(0, 0, 0, 0); // 하루의 시작 시각 고정
-          const nextDate = new Date(date);
-          nextDate.setDate(nextDate.getDate() + 1);
-          nextDate.setHours(0, 0, 0, 0); // 다음 날 시작 시각
+          // UTC 기준으로 날짜 계산
+          const now = new Date();
+          const date = new Date(
+            Date.UTC(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() - i,
+              0,
+              0,
+              0
+            )
+          );
+          const nextDate = new Date(
+            Date.UTC(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() - i + 1,
+              0,
+              0,
+              0
+            )
+          );
 
-        // 해당 날짜에 응답한 고객 수 (customer_info_id 기준으로 중복 제거)
-        const { data: dayResponses } = await supabase
-          .from("responses")
-          .select("customer_info_id")
-          .eq("survey_id", surveyId)
-          .gte("created_at", date.toISOString())
-          .lt("created_at", nextDate.toISOString());
+          // 해당 날짜에 응답한 고객 수 (customer_info_id 기준으로 중복 제거)
+          const { data: dayResponses } = await supabase
+            .from("responses")
+            .select("customer_info_id")
+            .eq("survey_id", surveyId)
+            .gte("created_at", date.toISOString())
+            .lt("created_at", nextDate.toISOString());
 
-        const uniqueCustomers = new Set(
-          (dayResponses || []).map((r) => r.customer_info_id)
-        );
+          console.log(
+            `Response trend for ${date.toISOString()} to ${nextDate.toISOString()}:`,
+            dayResponses?.length || 0,
+            "responses"
+          );
 
-        trendData.push({
+          const uniqueCustomers = new Set(
+            (dayResponses || []).map((r) => r.customer_info_id)
+          );
+
+          trendData.push({
             date: date.toLocaleDateString("ko-KR", {
               month: "short",
               day: "numeric",
             }),
-          count: uniqueCustomers.size,
-        });
+            count: uniqueCustomers.size,
+          });
         }
         setResponseTrendData(trendData);
       } catch (error) {
@@ -385,6 +488,8 @@ export default function DashboardPage() {
           .eq("survey_id", surveyId)
           .eq("required_question_category", "overall_satisfaction")
           .not("rating", "is", null);
+
+        console.log("Rating distribution responses:", ratingResponses);
 
         if (!ratingResponses || ratingResponses.length === 0) {
           setRatingDistribution([]);
@@ -425,6 +530,15 @@ export default function DashboardPage() {
       authListener?.subscription.unsubscribe();
     };
   }, [router]);
+
+  // Compute latest non-zero revisit trend entry for caption
+  const latestRevisitEntry =
+    [...revisitTrendData].reverse().find((entry) => entry.count > 0) ||
+    revisitTrendData[revisitTrendData.length - 1];
+  // Compute latest non-zero response trend entry for caption
+  const latestResponseEntry =
+    [...responseTrendData].reverse().find((entry) => entry.count > 0) ||
+    responseTrendData[responseTrendData.length - 1];
 
   if (loading) {
     return (
@@ -535,7 +649,7 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-2">
               <p className="text-3xl font-bold text-gray-900">
-                {`${dashboardStats.avgRating}점`}
+                {dashboardStats.avgRating.toFixed(1)}점
               </p>
               <p className="text-xs text-gray-500">전반적 만족도</p>
             </div>
@@ -561,39 +675,141 @@ export default function DashboardPage() {
               {revisitTrendData.length > 0 ? (
                 <div className="space-y-4">
                   {/* 차트 영역 */}
-                  <div className="h-32 flex items-end justify-between">
-                      {revisitTrendData.map((data, index) => (
-                        <div
-                          key={index}
-                          className="flex flex-col items-center flex-1"
+                  <div className="h-48 relative">
+                    <svg className="w-full h-full overflow-visible">
+                      <defs>
+                        <linearGradient
+                          id="revisitGradient"
+                          x1="0%"
+                          y1="0%"
+                          x2="0%"
+                          y2="100%"
                         >
-                          <div
-                            className="w-4 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t"
-                            style={{
-                              height: `${Math.max(data.percentage, 5)}%`,
-                            }}
-                          ></div>
-                          <span className="text-xs text-gray-500 mt-2 w-12 text-center">
-                            {data.date}
-                          </span>
-                        </div>
+                          <stop
+                            offset="0%"
+                            stopColor="#3b82f6"
+                            stopOpacity="0.3"
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor="#3b82f6"
+                            stopOpacity="0"
+                          />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Y축 그리드 라인 및 라벨 */}
+                      {[0, 25, 50, 75, 100].map((value) => (
+                        <g key={value}>
+                          <line
+                            x1="30"
+                            y1={`${100 - value}%`}
+                            x2="100%"
+                            y2={`${100 - value}%`}
+                            stroke="#e5e7eb"
+                            strokeDasharray="2,2"
+                          />
+                          <text
+                            x="25"
+                            y={`${100 - value}%`}
+                            textAnchor="end"
+                            className="text-xs"
+                            fill="#6b7280"
+                            dominantBaseline="middle"
+                          >
+                            {value}%
+                          </text>
+                        </g>
                       ))}
+
+                      {/* 영역 채우기 */}
+                      <path
+                        d={
+                          revisitTrendData
+                            .map((data, index) => {
+                              const x =
+                                30 +
+                                (index / (revisitTrendData.length - 1)) * 70;
+                              const y = `${100 - data.percentage}%`;
+                              if (index === 0) return `M ${x} ${y}`;
+                              return `L ${x} ${y}`;
+                            })
+                            .join(" ") + ` L ${100} 100% L 30 100% Z`
+                        }
+                        fill="url(#revisitGradient)"
+                      />
+
+                      {/* 선 그래프 */}
+                      <polyline
+                        points={revisitTrendData
+                          .map((data, index) => {
+                            const x =
+                              30 + (index / (revisitTrendData.length - 1)) * 70;
+                            const y = 100 - data.percentage;
+                            return `${x},${y}%`;
+                          })
+                          .join(" ")}
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth="2"
+                      />
+
+                      {/* 데이터 포인트 */}
+                      {revisitTrendData.map((data, index) => {
+                        const x =
+                          30 + (index / (revisitTrendData.length - 1)) * 70;
+                        const y = `${100 - data.percentage}%`;
+                        return (
+                          <g key={index}>
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="4"
+                              fill="#3b82f6"
+                              stroke="white"
+                              strokeWidth="2"
+                            />
+                            {data.percentage > 0 && (
+                              <text
+                                x={x}
+                                y={y}
+                                dy="-10"
+                                textAnchor="middle"
+                                className="text-xs font-medium"
+                                fill="#3b82f6"
+                              >
+                                {data.percentage}%
+                              </text>
+                            )}
+                          </g>
+                        );
+                      })}
+
+                      {/* X축 날짜 라벨 */}
+                      {revisitTrendData.map((data, index) => (
+                        <text
+                          key={index}
+                          x={30 + (index / (revisitTrendData.length - 1)) * 70}
+                          y="95%"
+                          textAnchor="middle"
+                          className="text-xs"
+                          fill="#6b7280"
+                        >
+                          {data.date}
+                        </text>
+                      ))}
+                    </svg>
                   </div>
                   {/* 최신 데이터 표시 */}
                   <div className="bg-blue-50 rounded-lg p-3">
                     <div className="text-sm text-gray-600">
                       최근 데이터:{" "}
                       <span className="font-medium text-blue-600">
-                        {revisitTrendData[revisitTrendData.length - 1]
-                          ?.percentage || 0}
-                        %
+                        {latestRevisitEntry.percentage}%
                       </span>
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      응답{" "}
-                      {revisitTrendData[revisitTrendData.length - 1]?.count ||
-                        0}
-                      명 기준
+                      응답 {latestRevisitEntry.count}명 기준
                     </div>
                   </div>
                 </div>
@@ -632,37 +848,162 @@ export default function DashboardPage() {
               {responseTrendData.length > 0 ? (
                 <div className="space-y-4">
                   {/* 차트 영역 */}
-                  <div className="h-32 flex items-end justify-between">
+                  <div className="h-48 relative">
+                    <svg className="w-full h-full overflow-visible">
+                      <defs>
+                        <linearGradient
+                          id="responseGradient"
+                          x1="0%"
+                          y1="0%"
+                          x2="0%"
+                          y2="100%"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor="#10b981"
+                            stopOpacity="0.3"
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor="#10b981"
+                            stopOpacity="0"
+                          />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Y축 그리드 라인 및 라벨 */}
+                      {(() => {
+                        const maxCount = Math.max(
+                          ...responseTrendData.map((d) => d.count),
+                          1
+                        );
+                        const step = Math.ceil(maxCount / 4);
+                        const yLabels = Array.from(
+                          { length: 5 },
+                          (_, i) => i * step
+                        );
+
+                        return yLabels.map((value) => (
+                          <g key={value}>
+                            <line
+                              x1="30"
+                              y1={`${100 - (value / (step * 4)) * 100}%`}
+                              x2="100%"
+                              y2={`${100 - (value / (step * 4)) * 100}%`}
+                              stroke="#e5e7eb"
+                              strokeDasharray="2,2"
+                            />
+                            <text
+                              x="25"
+                              y={`${100 - (value / (step * 4)) * 100}%`}
+                              textAnchor="end"
+                              className="text-xs"
+                              fill="#6b7280"
+                              dominantBaseline="middle"
+                            >
+                              {value}
+                            </text>
+                          </g>
+                        ));
+                      })()}
+
+                      {/* 영역 채우기 */}
+                      <path
+                        d={
+                          responseTrendData
+                            .map((data, index) => {
+                              const maxCount = Math.max(
+                                ...responseTrendData.map((d) => d.count),
+                                1
+                              );
+                              const x =
+                                30 +
+                                (index / (responseTrendData.length - 1)) * 70;
+                              const y = 100 - (data.count / maxCount) * 100;
+                              if (index === 0) return `M ${x} ${y}%`;
+                              return `L ${x} ${y}%`;
+                            })
+                            .join(" ") + ` L ${100} 100% L 30 100% Z`
+                        }
+                        fill="url(#responseGradient)"
+                      />
+
+                      {/* 선 그래프 */}
+                      <polyline
+                        points={responseTrendData
+                          .map((data, index) => {
+                            const maxCount = Math.max(
+                              ...responseTrendData.map((d) => d.count),
+                              1
+                            );
+                            const x =
+                              30 +
+                              (index / (responseTrendData.length - 1)) * 70;
+                            const y = 100 - (data.count / maxCount) * 100;
+                            return `${x},${y}%`;
+                          })
+                          .join(" ")}
+                        fill="none"
+                        stroke="#10b981"
+                        strokeWidth="2"
+                      />
+
+                      {/* 데이터 포인트 */}
                       {responseTrendData.map((data, index) => {
                         const maxCount = Math.max(
-                          ...responseTrendData.map((d) => d.count)
+                          ...responseTrendData.map((d) => d.count),
+                          1
                         );
-                        const height =
-                          maxCount > 0 ? (data.count / maxCount) * 100 : 5;
+                        const x =
+                          30 + (index / (responseTrendData.length - 1)) * 70;
+                        const y = `${100 - (data.count / maxCount) * 100}%`;
                         return (
-                          <div
-                            key={index}
-                            className="flex flex-col items-center flex-1"
-                          >
-                            <div
-                              className="w-4 bg-gradient-to-t from-green-500 to-green-400 rounded-t"
-                              style={{ height: `${Math.max(height, 5)}%` }}
-                            ></div>
-                            <span className="text-xs text-gray-500 mt-2 w-12 text-center">
-                              {data.date}
-                            </span>
-                          </div>
+                          <g key={index}>
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="4"
+                              fill="#10b981"
+                              stroke="white"
+                              strokeWidth="2"
+                            />
+                            {data.count > 0 && (
+                              <text
+                                x={x}
+                                y={y}
+                                dy="-10"
+                                textAnchor="middle"
+                                className="text-xs font-medium"
+                                fill="#10b981"
+                              >
+                                {data.count}
+                              </text>
+                            )}
+                          </g>
                         );
                       })}
+
+                      {/* X축 날짜 라벨 */}
+                      {responseTrendData.map((data, index) => (
+                        <text
+                          key={index}
+                          x={30 + (index / (responseTrendData.length - 1)) * 70}
+                          y="95%"
+                          textAnchor="middle"
+                          className="text-xs"
+                          fill="#6b7280"
+                        >
+                          {data.date}
+                        </text>
+                      ))}
+                    </svg>
                   </div>
                   {/* 최신 데이터 표시 */}
                   <div className="bg-green-50 rounded-lg p-3">
                     <div className="text-sm text-gray-600">
                       최근 응답:{" "}
                       <span className="font-medium text-green-600">
-                        {responseTrendData[responseTrendData.length - 1]
-                          ?.count || 0}
-                        명
+                        {latestResponseEntry.count}명
                       </span>
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
