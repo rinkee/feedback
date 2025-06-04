@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {
   BarChart,
-  MessageSquare,
   ThumbsUp,
   Eye,
   AlertTriangle,
@@ -101,7 +100,7 @@ export default function DashboardPage() {
   const [dashboardStats, setDashboardStats] = useState({
     totalCustomers: 0,
     recentCustomerCount: 0,
-    avgResponseTime: 0,
+    avgRating: 0,
     unreadCount: 0,
   });
   const [recentResponses, setRecentResponses] = useState<RecentResponse[]>([]);
@@ -157,7 +156,7 @@ export default function DashboardPage() {
             // 차트 데이터 가져오기
             await fetchChartData(activeSurveyData.id);
 
-            // 통계 데이터 계산 (고객수, 신규고객, 평균 응답시간, NEW)
+            // 통계 데이터 계산 (고객수, 신규고객, 평균 평점, NEW)
             // 1) 전체 고객 수
             const { data: allCustomers } = await supabase
               .from("customer_info")
@@ -173,33 +172,9 @@ export default function DashboardPage() {
             );
             const recentCustomerCount = recentCustomers.length;
 
-            // 3) 평균 응답 소요 시간 (고객별로 created_at ~ 마지막 응답 created_at 평균)
-            let avgResponseTime = 0;
-            if (allCustomers && allCustomers.length > 0) {
-              let totalTime = 0;
-              let count = 0;
-              for (const customer of allCustomers) {
-                const { data: customerResponses } = await supabase
-                  .from("responses")
-                  .select("created_at")
-                  .eq("survey_id", activeSurveyData.id)
-                  .eq("customer_info_id", customer.id)
-                  .order("created_at", { ascending: true });
-                if (customerResponses && customerResponses.length > 0) {
-                  const start = new Date(customer.created_at).getTime();
-                  const end = new Date(
-                    customerResponses[customerResponses.length - 1].created_at
-                  ).getTime();
-                  if (end > start) {
-                    totalTime += (end - start) / 1000; // 초 단위
-                    count++;
-                  }
-                }
-              }
-              avgResponseTime = count > 0 ? Math.round(totalTime / count) : 0;
-            }
 
-            // 4) 읽지 않은 응답이 있는 고객 수(NEW)
+
+            // 3) 읽지 않은 응답이 있는 고객 수(NEW)
             const { data: unreadResponses } = await supabase
               .from("responses")
               .select("customer_info_id")
@@ -210,14 +185,8 @@ export default function DashboardPage() {
             );
             const unreadCount = unreadCustomerSet.size;
 
-            setDashboardStats({
-              totalCustomers,
-              recentCustomerCount,
-              avgResponseTime,
-              unreadCount,
-            });
-
-            // AI 통계/최근응답 등 기존 로직 유지
+            // AI 통계에서 평균 평점 가져오기
+            let avgRating = 0;
             const { data: aiStatsData } = await supabase
               .from("ai_statistics")
               .select("*")
@@ -226,7 +195,17 @@ export default function DashboardPage() {
               .limit(1);
             if (aiStatsData && aiStatsData.length > 0) {
               setLatestAIStats(aiStatsData[0]);
+              avgRating = aiStatsData[0].average_rating ?? 0;
             }
+
+            setDashboardStats({
+              totalCustomers,
+              recentCustomerCount,
+              avgRating,
+              unreadCount,
+            });
+
+            // 최근 응답 등 기존 로직 유지
             const { data: responsesData } = await supabase
               .from("responses")
               .select(
@@ -496,7 +475,7 @@ export default function DashboardPage() {
         )}
 
         {/* 주요 통계 카드 */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 전체 고객수 카드 */}
           <div className="bg-white rounded-2xl p-6 border border-gray-100">
             <div className="flex items-center space-x-2 mb-4">
@@ -531,37 +510,19 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 평균 응답시간 카드 */}
+          {/* 평균 평점 카드 */}
           <div className="bg-white rounded-2xl p-6 border border-gray-100">
             <div className="flex items-center space-x-2 mb-4">
               <div className="w-6 h-6 bg-yellow-500 rounded-lg flex items-center justify-center">
-                <Activity className="h-4 w-4 text-white" />
+                <Star className="h-4 w-4 text-white" />
               </div>
-              <h3 className="text-sm font-medium text-gray-900">
-                평균 응답시간
-              </h3>
+              <h3 className="text-sm font-medium text-gray-900">평균 평점</h3>
             </div>
             <div className="space-y-2">
               <p className="text-3xl font-bold text-gray-900">
-                {dashboardStats.avgResponseTime}초
+                {dashboardStats.avgRating ? `${dashboardStats.avgRating}점` : "N/A"}
               </p>
-              <p className="text-xs text-gray-500">응답 소요 시간</p>
-            </div>
-          </div>
-
-          {/* NEW(읽지 않은 응답) 카드 */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-6 h-6 bg-red-500 rounded-lg flex items-center justify-center">
-                <MessageSquare className="h-4 w-4 text-white" />
-              </div>
-              <h3 className="text-sm font-medium text-gray-900">NEW</h3>
-            </div>
-            <div className="space-y-2">
-              <p className="text-3xl font-bold text-gray-900">
-                {dashboardStats.unreadCount}
-              </p>
-              <p className="text-xs text-gray-500">읽지 않은 응답</p>
+              <p className="text-xs text-gray-500">전반적 만족도</p>
             </div>
           </div>
         </div>
@@ -585,8 +546,7 @@ export default function DashboardPage() {
               {revisitTrendData.length > 0 ? (
                 <div className="space-y-4">
                   {/* 차트 영역 */}
-                  <div className="relative h-32">
-                    <div className="absolute inset-0 flex items-end justify-between">
+                  <div className="h-32 flex items-end justify-between">
                       {revisitTrendData.map((data, index) => (
                         <div
                           key={index}
@@ -603,7 +563,6 @@ export default function DashboardPage() {
                           </span>
                         </div>
                       ))}
-                    </div>
                   </div>
                   {/* 최신 데이터 표시 */}
                   <div className="bg-blue-50 rounded-lg p-3">
@@ -650,7 +609,7 @@ export default function DashboardPage() {
               </div>
               {dashboardStats.unreadCount > 0 && (
                 <span className="ml-2 px-3 py-1 bg-red-100 text-red-600 text-xs rounded-full font-bold">
-                  NEW
+                  NEW {dashboardStats.unreadCount}
                 </span>
               )}
             </div>
@@ -658,8 +617,7 @@ export default function DashboardPage() {
               {responseTrendData.length > 0 ? (
                 <div className="space-y-4">
                   {/* 차트 영역 */}
-                  <div className="relative h-32">
-                    <div className="absolute inset-0 flex items-end justify-between">
+                  <div className="h-32 flex items-end justify-between">
                       {responseTrendData.map((data, index) => {
                         const maxCount = Math.max(
                           ...responseTrendData.map((d) => d.count)
@@ -681,7 +639,6 @@ export default function DashboardPage() {
                           </div>
                         );
                       })}
-                    </div>
                   </div>
                   {/* 최신 데이터 표시 */}
                   <div className="bg-green-50 rounded-lg p-3">
