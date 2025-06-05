@@ -713,6 +713,7 @@ export default function DashboardPage() {
                             stroke="#e5e7eb"
                             strokeDasharray="2,2"
                           />
+
                             <text
                               x="25"
                               y={100 - value}
@@ -723,6 +724,7 @@ export default function DashboardPage() {
                             >
                               {value}%
                             </text>
+
                         </g>
                       ))}
 
@@ -900,6 +902,7 @@ export default function DashboardPage() {
                               stroke="#e5e7eb"
                               strokeDasharray="2,2"
                             />
+
                               <text
                                 x="25"
                                 y={100 - (value / maxCount) * 100}
@@ -910,6 +913,7 @@ export default function DashboardPage() {
                               >
                                 {value}
                               </text>
+
                           </g>
                         ));
                       })()}
