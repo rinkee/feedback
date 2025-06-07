@@ -244,6 +244,18 @@ export default function SurveyViewPage() {
 
           const dbOptions = q.options; // q.options is the JSONB field from the database
 
+          // 필수질문 카테고리 확인 - 디버그 로그 추가
+          const requiredQuestionCategory =
+            (q.required_questions as any)?.category || null;
+          console.log(
+            `질문 "${q.question_text.substring(
+              0,
+              30
+            )}..." - required_question_id: ${
+              q.required_question_id
+            }, category: ${requiredQuestionCategory}`
+          );
+
           return {
             id: q.id,
             text: q.question_text,
@@ -269,11 +281,7 @@ export default function SurveyViewPage() {
                 ? dbQuestionType
                 : String(dbQuestionType), // Store original, ensure string
             original_options: dbOptions,
-            required_question_category:
-              Array.isArray(q.required_questions) &&
-              q.required_questions.length > 0
-                ? (q.required_questions as any[])[0].category
-                : null,
+            required_question_category: requiredQuestionCategory,
           };
         });
 
@@ -426,10 +434,6 @@ export default function SurveyViewPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session!.user.id;
 
-      console.log("Submitting survey with customer info...");
-      console.log("Customer info:", customerInfo);
-      console.log("Survey answers:", answers);
-
       // 이름이 없으면 "익명" + 랜덤번호로 기본값 생성
       const customerName =
         customerInfo.name.trim() ||
@@ -437,33 +441,31 @@ export default function SurveyViewPage() {
           .toString()
           .padStart(3, "0")}`;
 
-      // 1. 고객 정보 저장 - 항상 새로운 레코드 생성
-      const { data: customerData, error: customerInsertError } = await supabase
+      // 선택된 성별을 그대로 사용 (DB 제약에서 '남성','여성','답변안함'만 허용)
+      const safeGender = customerInfo.gender; // '남성' | '여성' | '답변안함'
+
+      // [✔] customer_info 한 번만 insert
+      const { data: customerData, error: customerError } = await supabase
         .from("customer_info")
         .insert({
           survey_id: surveyId,
           user_id: userId,
           name: customerName,
           age_group: customerInfo.age_group,
-          gender: customerInfo.gender,
+          gender: safeGender,
           phone: customerInfo.phone?.trim() || null,
         })
         .select();
 
-      console.log("Customer info insert result:", {
-        customerData,
-        customerInsertError,
-      });
-
-      if (customerInsertError || !customerData || customerData.length === 0) {
+      if (customerError || !customerData || customerData.length === 0) {
         throw new Error(
           `고객 정보 저장 중 오류가 발생했습니다: ${
-            customerInsertError?.message || "알 수 없는 오류"
+            customerError?.message || "저장 실패"
           }`
         );
       }
 
-      // 2. 설문 응답 처리 - 항상 새로운 응답 생성
+      // 2. 설문 응답 처리
       const responsesToProcess = Object.values(answers)
         .filter(
           (ans) =>
@@ -472,7 +474,6 @@ export default function SurveyViewPage() {
             typeof ans.rating === "number"
         )
         .map((ans) => {
-          // 해당 질문의 필수질문 카테고리 찾기
           const question = survey!.questions.find(
             (q) => q.id === ans.question_id
           );
@@ -482,51 +483,37 @@ export default function SurveyViewPage() {
             survey_id: surveyId,
             question_id: ans.question_id,
             user_id: userId,
-            customer_info_id: customerData[0].id, // 새로 생성된 고객 정보 ID 연결
-            required_question_category: requiredQuestionCategory || null, // 필수질문 카테고리 저장
+            customer_info_id: customerData[0].id,
+            required_question_category: requiredQuestionCategory || null,
           };
-
-          if (ans.response_text && ans.response_text.trim() !== "") {
+          if (ans.response_text?.trim()) {
             responseData.response_text = ans.response_text.trim();
           }
-
-          if (ans.selected_option_ids && ans.selected_option_ids.length > 0) {
+          if (ans.selected_option_ids?.length) {
             responseData.selected_option = ans.selected_option_ids[0];
             responseData.selected_options = ans.selected_option_ids;
           }
-
           if (typeof ans.rating === "number") {
             responseData.rating = ans.rating;
           }
-
           return responseData;
         });
 
-      console.log("Responses to process:", responsesToProcess);
-
-      // 3. 해당 customer_info_id의 기존 응답 삭제 (같은 사용자가 재제출하는 경우 대비)
+      // 3. 기존 응답 삭제
       const { error: deleteError } = await supabase
         .from("responses")
         .delete()
         .eq("customer_info_id", customerData[0].id);
-
       if (deleteError) {
         console.warn("기존 응답 삭제 중 오류:", deleteError);
-        // 기존 응답이 없을 수도 있으므로 오류가 나도 계속 진행
       }
 
-      // 4. 모든 응답을 새로 삽입
+      // 4. 새 응답 삽입
       if (responsesToProcess.length > 0) {
-        const { data: insertData, error: insertError } = await supabase
+        const { error: insertError } = await supabase
           .from("responses")
           .insert(responsesToProcess)
           .select();
-
-        console.log("Responses insert result:", {
-          insertData,
-          insertError,
-        });
-
         if (insertError) {
           throw new Error(
             `응답 저장 중 오류가 발생했습니다: ${insertError.message}`

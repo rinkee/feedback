@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   ThumbsUp,
   ThumbsDown,
+  HelpCircle,
 } from "lucide-react";
 
 interface CustomerInfo {
@@ -240,6 +241,10 @@ export default function SurveyResponsesPage() {
       return;
     }
 
+    if (isAnalyzing) {
+      return; // 이미 분석 중인 경우 중단
+    }
+
     setIsAnalyzing(true);
     try {
       const response = await fetch(`/api/surveys/${surveyId}/ai-analysis`, {
@@ -250,7 +255,29 @@ export default function SurveyResponsesPage() {
       });
 
       if (response.ok) {
+        const result = await response.json();
+        // Gemini 분석 결과를 바로 상태에 반영
+        if (result.analysis) {
+          const geminiAnalysis = {
+            id: Date.now().toString(),
+            summary: result.analysis.summary,
+            statistics: result.analysis.statistics,
+            recommendations: result.analysis.recommendations,
+            analysis_date: new Date().toISOString(),
+            total_responses: result.totalResponses,
+            average_rating: result.keyStats.averageRating,
+            main_customer_age_group: result.keyStats.mainCustomerAgeGroup,
+            main_customer_gender: result.keyStats.mainCustomerGender,
+            top_pros: result.analysis.topPros,
+            top_cons: result.analysis.topCons,
+          };
+          setLatestAiAnalysis(geminiAnalysis);
+          setAiStatistics([geminiAnalysis]);
+        }
+        // AI 통계를 새로 가져와서 상태 업데이트
         await fetchAIStatistics();
+        // 전체 데이터도 다시 가져와서 최신 상태 반영
+        await fetchSurveyData();
         alert("AI 분석이 완료되었습니다!");
       } else {
         const errorData = await response.json();
@@ -304,14 +331,39 @@ export default function SurveyResponsesPage() {
   };
 
   const formatResponse = (response: Response, question: Question) => {
+    // 주관식 응답
     if (response.response_text && response.response_text.trim()) {
       return response.response_text.trim();
     }
 
+    // 평점 응답
     if (response.rating !== null && response.rating !== undefined) {
       return `${response.rating}점`;
     }
 
+    // 다중선택 응답 처리
+    if (response.selected_options && Array.isArray(response.selected_options)) {
+      if (
+        question.options &&
+        question.options.choices_text &&
+        Array.isArray(question.options.choices_text)
+      ) {
+        const formattedOptions = response.selected_options.map((option) => {
+          const match = option.match(/^choice_(\d+)$/);
+          if (match) {
+            const index = parseInt(match[1]) - 1;
+            if (question.options.choices_text[index]) {
+              return question.options.choices_text[index];
+            }
+          }
+          return option;
+        });
+        return formattedOptions.join(", ");
+      }
+      return response.selected_options.join(", ");
+    }
+
+    // 단일선택 응답 처리
     if (response.selected_option && response.selected_option.trim()) {
       if (
         question.options &&
@@ -520,7 +572,18 @@ export default function SurveyResponsesPage() {
                 </p>
               </div>
             </div>
-            {latestAiAnalysis ? (
+            {/* AI 분석 중 상태 */}
+            {isAnalyzing ? (
+              <div className="text-center py-12">
+                <Bot className="h-16 w-16 text-purple-500 mx-auto mb-4 animate-spin" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  분석중
+                </h3>
+                <p className="text-gray-600">
+                  AI가 응답 데이터를 분석하고 있습니다...
+                </p>
+              </div>
+            ) : latestAiAnalysis ? (
               <div className="flex space-x-3">
                 {aiStatistics.length > 0 && (
                   <button
@@ -534,18 +597,13 @@ export default function SurveyResponsesPage() {
                 <button
                   onClick={generateAIAnalysis}
                   disabled={isAnalyzing || responsesData.length === 0}
-                  className="flex items-center px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                  className={`flex items-center px-6 py-2 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg ${
+                    isAnalyzing || responsesData.length === 0
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                  } text-white`}
                 >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      AI 분석 중...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />새 AI 분석 생성
-                    </>
-                  )}
+                  <Sparkles className="h-4 w-4 mr-2" />새 AI 분석 생성
                 </button>
               </div>
             ) : (
@@ -559,8 +617,12 @@ export default function SurveyResponsesPage() {
                 </p>
                 <button
                   onClick={generateAIAnalysis}
-                  disabled={responsesData.length === 0}
-                  className="px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                  disabled={isAnalyzing || responsesData.length === 0}
+                  className={`px-6 py-2 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg ${
+                    isAnalyzing || responsesData.length === 0
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                  } text-white`}
                 >
                   <Sparkles className="h-4 w-4 mr-2 inline" />첫 번째 AI 분석
                   시작하기
@@ -571,56 +633,115 @@ export default function SurveyResponsesPage() {
 
           {latestAiAnalysis ? (
             <div className="space-y-6">
-              {/* 주요 통계 카드들 */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl p-4 border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+              {/* 핵심 지표 카드들 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {/* NPS 카드 */}
+                <div className="bg-white rounded-xl p-6 border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                      <h4 className="text-sm font-semibold text-gray-700">
+                        NPS
+                      </h4>
+                    </div>
+                    <div className="group relative">
+                      <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                      <div className="absolute bottom-6 right-0 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        순추천지수(Net Promoter Score): 고객이 다른 사람에게
+                        추천할 의향을 나타내는 지표 (-100~100)
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-blue-600 mb-1">
+                    {latestAiAnalysis.statistics?.nps || 0}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {(latestAiAnalysis.statistics?.nps || 0) > 50
+                      ? "우수"
+                      : (latestAiAnalysis.statistics?.nps || 0) > 0
+                      ? "보통"
+                      : "개선필요"}
+                  </p>
+                </div>
+
+                {/* CSAT 카드 */}
+                <div className="bg-white rounded-xl p-6 border border-green-100 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <Star className="h-5 w-5 text-green-600" />
+                      <h4 className="text-sm font-semibold text-gray-700">
+                        CSAT
+                      </h4>
+                    </div>
+                    <div className="group relative">
+                      <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                      <div className="absolute bottom-6 right-0 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        고객만족도(Customer Satisfaction): 전반적인 만족도를
+                        백분율로 표시 (0~100%)
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-3xl font-bold text-green-600 mb-1">
+                    {latestAiAnalysis.statistics?.csat || 0}%
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {(latestAiAnalysis.statistics?.csat || 0) > 80
+                      ? "우수"
+                      : (latestAiAnalysis.statistics?.csat || 0) > 60
+                      ? "보통"
+                      : "개선필요"}
+                  </p>
+                </div>
+
+                {/* 충성도 카드 */}
+                <div className="bg-white rounded-xl p-6 border border-purple-100 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center space-x-2 mb-2">
-                    <Users className="h-5 w-5 text-blue-600" />
+                    <Users className="h-5 w-5 text-purple-600" />
                     <h4 className="text-sm font-semibold text-gray-700">
-                      총 응답수
+                      충성도
                     </h4>
                   </div>
-                  <p className="text-2xl font-bold text-blue-600">
+                  <p className="text-3xl font-bold text-purple-600 mb-1">
+                    {latestAiAnalysis.statistics?.loyaltyIndex || 0}%
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {(latestAiAnalysis.statistics?.loyaltyIndex || 0) > 70
+                      ? "높음"
+                      : (latestAiAnalysis.statistics?.loyaltyIndex || 0) > 50
+                      ? "보통"
+                      : "낮음"}
+                  </p>
+                </div>
+              </div>
+
+              {/* 기본 통계 정보 */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-gray-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-gray-600 mb-1">총 고객수</div>
+                  <div className="text-xl font-bold text-gray-900">
                     {latestAiAnalysis.total_responses}명
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl p-4 border border-yellow-100 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Star className="h-5 w-5 text-yellow-600" />
-                    <h4 className="text-sm font-semibold text-gray-700">
-                      평균 평점
-                    </h4>
                   </div>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {latestAiAnalysis.average_rating !== undefined && latestAiAnalysis.average_rating !== null
-                      ? `${latestAiAnalysis.average_rating}점`
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-gray-600 mb-1">평균 평점</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {latestAiAnalysis?.average_rating !== undefined &&
+                    latestAiAnalysis?.average_rating !== null
+                      ? `${latestAiAnalysis?.average_rating}점`
                       : "0점"}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl p-4 border border-green-100 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Calendar className="h-5 w-5 text-green-600" />
-                    <h4 className="text-sm font-semibold text-gray-700">
-                      주 고객층
-                    </h4>
                   </div>
-                  <p className="text-lg font-bold text-green-600">
-                    {latestAiAnalysis.main_customer_age_group || "N/A"}
-                  </p>
                 </div>
-
-                <div className="bg-white rounded-xl p-4 border border-purple-100 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <User className="h-5 w-5 text-purple-600" />
-                    <h4 className="text-sm font-semibold text-gray-700">
-                      주 성별
-                    </h4>
+                <div className="bg-gray-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-gray-600 mb-1">주 고객층</div>
+                  <div className="text-lg font-bold text-gray-900">
+                    {latestAiAnalysis?.main_customer_age_group || "N/A"}
                   </div>
-                  <p className="text-lg font-bold text-purple-600">
-                    {latestAiAnalysis.main_customer_gender || "N/A"}
-                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-gray-600 mb-1">주 성별</div>
+                  <div className="text-lg font-bold text-gray-900">
+                    {latestAiAnalysis?.main_customer_gender || "N/A"}
+                  </div>
                 </div>
               </div>
 
@@ -634,19 +755,19 @@ export default function SurveyResponsesPage() {
                   </h3>
                 </div>
                 <p className="text-gray-700 leading-relaxed text-base">
-                  {latestAiAnalysis.summary}
+                  {latestAiAnalysis?.summary}
                 </p>
               </div>
 
               {/* 장점과 단점 섹션 */}
-              {(latestAiAnalysis.top_pros &&
-                latestAiAnalysis.top_pros.length > 0) ||
-              (latestAiAnalysis.top_cons &&
-                latestAiAnalysis.top_cons.length > 0) ? (
+              {(latestAiAnalysis?.top_pros &&
+                latestAiAnalysis?.top_pros.length > 0) ||
+              (latestAiAnalysis?.top_cons &&
+                latestAiAnalysis?.top_cons.length > 0) ? (
                 <div className="grid lg:grid-cols-2 gap-6">
                   {/* 장점 */}
-                  {latestAiAnalysis.top_pros &&
-                    latestAiAnalysis.top_pros.length > 0 && (
+                  {latestAiAnalysis?.top_pros &&
+                    latestAiAnalysis?.top_pros.length > 0 && (
                       <div className="bg-white rounded-xl p-6 border border-green-200 shadow-sm">
                         <div className="flex items-center space-x-3 mb-4">
                           <div className="p-2 bg-green-100 rounded-lg">
@@ -657,7 +778,7 @@ export default function SurveyResponsesPage() {
                           </h3>
                         </div>
                         <div className="space-y-2">
-                          {latestAiAnalysis.top_pros.map((pro, index) => (
+                          {latestAiAnalysis?.top_pros?.map((pro, index) => (
                             <div
                               key={index}
                               className="flex items-start space-x-2"
@@ -677,8 +798,8 @@ export default function SurveyResponsesPage() {
                     )}
 
                   {/* 단점 */}
-                  {latestAiAnalysis.top_cons &&
-                    latestAiAnalysis.top_cons.length > 0 && (
+                  {latestAiAnalysis?.top_cons &&
+                    latestAiAnalysis?.top_cons.length > 0 && (
                       <div className="bg-white rounded-xl p-6 border border-orange-200 shadow-sm">
                         <div className="flex items-center space-x-3 mb-4">
                           <div className="p-2 bg-orange-100 rounded-lg">
@@ -689,7 +810,7 @@ export default function SurveyResponsesPage() {
                           </h3>
                         </div>
                         <div className="space-y-2">
-                          {latestAiAnalysis.top_cons.map((con, index) => (
+                          {latestAiAnalysis?.top_cons?.map((con, index) => (
                             <div
                               key={index}
                               className="flex items-start space-x-2"
@@ -710,31 +831,19 @@ export default function SurveyResponsesPage() {
                 </div>
               ) : null}
 
-              <div className="bg-white rounded-xl p-4 border border-purple-100">
-                <button
-                  onClick={() =>
-                    setExpandedRecommendations(!expandedRecommendations)
-                  }
-                  className="flex items-center justify-between w-full text-left"
-                >
-                  <h3 className="font-semibold text-gray-900 flex items-center">
-                    <Sparkles className="h-5 w-5 text-purple-600 mr-2" />
+              {/* AI 개선 방안 */}
+              <div className="bg-white rounded-xl p-6 border border-purple-100 shadow-sm">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Sparkles className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">
                     AI 개선 방안
                   </h3>
-                  {expandedRecommendations ? (
-                    <ChevronDown className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <ChevronRight className="h-5 w-5 text-gray-400" />
-                  )}
-                </button>
-
-                {expandedRecommendations && (
-                  <div className="mt-3">
-                    <div className="text-gray-700 leading-relaxed whitespace-pre-line">
-                      {latestAiAnalysis.recommendations}
-                    </div>
-                  </div>
-                )}
+                </div>
+                <div className="text-gray-700 leading-relaxed whitespace-pre-line">
+                  {latestAiAnalysis?.recommendations}
+                </div>
               </div>
             </div>
           ) : null}
@@ -938,18 +1047,14 @@ export default function SurveyResponsesPage() {
                                     {question.question_type ===
                                       "single_choice" && (
                                       <div className="text-sm text-gray-800 bg-white p-3 rounded">
-                                        {response.selected_option ||
-                                          "선택 없음"}
+                                        {formatResponse(response, question)}
                                       </div>
                                     )}
 
                                     {question.question_type ===
                                       "multiple_choice" && (
                                       <div className="text-sm text-gray-800 bg-white p-3 rounded">
-                                        {response.selected_options &&
-                                        Array.isArray(response.selected_options)
-                                          ? response.selected_options.join(", ")
-                                          : formatResponse(response, question)}
+                                        {formatResponse(response, question)}
                                       </div>
                                     )}
 

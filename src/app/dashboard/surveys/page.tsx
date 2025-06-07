@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import EmptyState from "@/components/EmptyState";
 import {
   Plus,
   Edit3,
@@ -232,10 +233,16 @@ export default function SurveysPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="text-gray-600">설문 목록을 불러오는 중...</span>
-        </div>
+        <EmptyState
+          icon={({ className }) => (
+            <div
+              className={`rounded-full border-b-2 border-blue-600 animate-spin ${className}`}
+            />
+          )}
+          title="설문 목록을 불러오는 중..."
+          description="잠시만 기다려 주세요."
+          variant="default"
+        />
       </div>
     );
   }
@@ -299,23 +306,21 @@ export default function SurveysPage() {
 
         {/* Surveys List */}
         {surveys.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-12 text-center">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-              <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" />
-            </div>
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
-              첫 설문을 만들어보세요!
-            </h3>
-            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-              아직 생성된 설문이 없습니다. 새 설문을 만들어 고객 피드백 수집을
-              시작하세요.
-            </p>
-            <Link
-              href="/dashboard/surveys/new"
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              <Plus size={16} className="mr-2" />새 설문 만들기
-            </Link>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-12">
+            <EmptyState
+              icon={BarChart3}
+              title="첫 설문을 만들어보세요!"
+              description="아직 생성된 설문이 없습니다. 새 설문을 만들어 고객 피드백 수집을 시작하세요."
+              action={
+                <Link
+                  href="/dashboard/surveys/new"
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+                >
+                  <Plus size={16} className="mr-2" />새 설문 만들기
+                </Link>
+              }
+              variant="default"
+            />
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

@@ -104,7 +104,7 @@ export default function RootLayout({
                     href="/dashboard"
                     className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                       isActiveMenu("/dashboard")
-                        ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                        ? "bg-blue-50 text-blue-700  border-blue-600"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
@@ -115,7 +115,7 @@ export default function RootLayout({
                     href="/dashboard/surveys"
                     className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                       isActiveMenu("/dashboard/surveys")
-                        ? "bg-blue-50 text-blue-700 border-r-2 border-blue-600"
+                        ? "bg-blue-50 text-blue-700  border-blue-600"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
@@ -126,7 +126,7 @@ export default function RootLayout({
                     href="/dashboard/required-questions"
                     className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                       isActiveMenu("/dashboard/required-questions")
-                        ? "bg-green-50 text-green-700 border-r-2 border-green-600"
+                        ? "bg-blue-50 text-blue-700  border-blue-600"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
@@ -137,7 +137,7 @@ export default function RootLayout({
                     href="/dashboard/store"
                     className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                       isActiveMenu("/dashboard/store")
-                        ? "bg-purple-50 text-purple-700 border-r-2 border-purple-600"
+                        ? "bg-blue-50 text-blue-700  border-blue-600"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
@@ -147,7 +147,7 @@ export default function RootLayout({
                     href="/settings"
                     className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                       isActiveMenu("/settings")
-                        ? "bg-gray-50 text-gray-700 border-r-2 border-gray-600"
+                        ? "bg-blue-50 text-blue-700  border-blue-600"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >

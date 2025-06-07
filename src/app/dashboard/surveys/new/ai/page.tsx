@@ -750,92 +750,113 @@ export default function AISurveyPage() {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* 설문 정보 미리보기 */}
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                <div className="max-w-3xl mx-auto bg-gray-50 p-4 pb-8">
+                  {/* 헤더 */}
+                  <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">
                       {editedSurvey.title}
-                    </h3>
+                    </h1>
                     <p className="text-gray-600">{editedSurvey.description}</p>
                   </div>
 
-                  {/* 필수질문 안내 */}
-                  {requiredQuestions.length > 0 && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <div className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 mr-3" />
-                        <div>
-                          <h3 className="text-sm font-medium text-green-800">
-                            필수질문 ({requiredQuestions.length}개)
-                          </h3>
-                          <p className="text-sm text-green-700 mt-1">
-                            아래 필수질문들이 자동으로 설문에 포함됩니다.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 질문 미리보기 */}
-                  <div className="space-y-4">
+                  {/* 설문 콘텐츠 */}
+                  <div className="space-y-6">
                     {/* 필수질문 미리보기 */}
                     {requiredQuestions.map((requiredQ, index) => (
                       <div
                         key={`preview-required-${requiredQ.id}`}
-                        className="border border-green-200 rounded-lg p-4 bg-green-50"
+                        className="bg-white ring-1 ring-gray-200 shadow-sm rounded-lg p-5"
                       >
-                        <div className="flex items-center space-x-2 mb-3">
-                          <p className="font-medium text-green-900">
-                            {index + 1}. {requiredQ.question_text}
-                          </p>
-                          <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
-                            필수
-                          </span>
+                        <div className="mb-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="inline-block px-3 py-1 text-md font-medium rounded-full bg-gray-100 text-gray-700">
+                              {index + 1}
+                            </span>
+                            <span className="text-red-500 text-sm">필수</span>
+                          </div>
+                          <h3 className="text-xl leading-7 break-keep font-semibold text-gray-900">
+                            {requiredQ.question_text}
+                          </h3>
                         </div>
 
-                        {requiredQ.question_type === "text" && (
-                          <textarea
-                            className="w-full p-3 border border-green-300 rounded-lg bg-white"
-                            rows={3}
-                            placeholder="응답자가 답변을 입력하는 영역"
-                            disabled
-                          />
-                        )}
+                        <div>
+                          {requiredQ.question_type === "text" && (
+                            <div>
+                              <textarea
+                                rows={4}
+                                className="w-full p-3 rounded-lg resize-none border border-gray-300 bg-white focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                placeholder="답변을 입력해주세요"
+                                disabled
+                              />
+                            </div>
+                          )}
 
-                        {requiredQ.question_type === "rating" && (
-                          <div>
-                            {/* 별점 척도 라벨 표시 */}
-                            {(requiredQ.options?.rating_min_label ||
-                              requiredQ.options?.rating_max_label) && (
-                              <div className="flex justify-between items-center mb-3 px-2 text-sm text-green-600">
-                                <span className="font-medium">
-                                  1점:{" "}
+                          {requiredQ.question_type === "rating" && (
+                            <div>
+                              <div className="flex justify-between text-sm mb-4 px-0 text-gray-600">
+                                <span>
                                   {requiredQ.options?.rating_min_label ||
                                     "매우 불만족"}
                                 </span>
-                                <span className="font-medium">
-                                  5점:{" "}
+                                <span>
                                   {requiredQ.options?.rating_max_label ||
                                     "매우 만족"}
                                 </span>
                               </div>
-                            )}
 
-                            <div className="flex items-center space-x-1">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <span
-                                  key={star}
-                                  className="text-2xl text-yellow-400"
-                                >
-                                  ★
-                                </span>
-                              ))}
-                              <span className="ml-3 text-sm text-gray-500">
-                                (1-5점)
-                              </span>
+                              <div className="grid grid-cols-5 gap-2">
+                                {[1, 2, 3, 4, 5].map((ratingValue) => (
+                                  <label
+                                    key={ratingValue}
+                                    className="block p-4 rounded-lg text-center cursor-pointer border border-gray-300 bg-white"
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`preview_required_q_${requiredQ.id}`}
+                                      value={ratingValue}
+                                      className="sr-only"
+                                      disabled
+                                    />
+                                    <div className="text-lg font-bold text-gray-900">
+                                      {ratingValue}
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
+
+                          {(requiredQ.question_type === "single_choice" ||
+                            requiredQ.question_type === "multiple_choice") && (
+                            <div className="space-y-3">
+                              {(requiredQ.options?.choices_text || []).map(
+                                (choice: string, choiceIndex: number) => (
+                                  <label
+                                    key={choiceIndex}
+                                    className="block p-4 rounded-lg cursor-pointer border border-gray-300 bg-white"
+                                  >
+                                    <div className="flex items-center">
+                                      <input
+                                        type={
+                                          requiredQ.question_type ===
+                                          "single_choice"
+                                            ? "radio"
+                                            : "checkbox"
+                                        }
+                                        name={`preview_required_q_${requiredQ.id}`}
+                                        className="mr-3"
+                                        disabled
+                                      />
+                                      <span className="text-gray-900">
+                                        {choice}
+                                      </span>
+                                    </div>
+                                  </label>
+                                )
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
 
@@ -843,82 +864,107 @@ export default function AISurveyPage() {
                     {editedSurvey.questions.map((question, index) => (
                       <div
                         key={index}
-                        className="border border-gray-200 rounded-lg p-4"
+                        className="bg-white ring-1 ring-gray-200 shadow-sm rounded-lg p-5"
                       >
-                        <p className="font-medium text-gray-900 mb-3">
-                          {requiredQuestions.length + index + 1}.{" "}
-                          {question.question_text}
-                        </p>
+                        <div className="mb-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <span className="inline-block px-3 py-1 text-md font-medium rounded-full bg-gray-100 text-gray-700">
+                              {requiredQuestions.length + index + 1}
+                            </span>
+                          </div>
+                          <h3 className="text-xl leading-7 break-keep font-semibold text-gray-900">
+                            {question.question_text}
+                          </h3>
+                        </div>
 
-                        {question.question_type === "text" && (
-                          <textarea
-                            className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50"
-                            rows={3}
-                            placeholder="응답자가 답변을 입력하는 영역"
-                            disabled
-                          />
-                        )}
+                        <div>
+                          {question.question_type === "text" && (
+                            <div>
+                              <textarea
+                                rows={4}
+                                className="w-full p-3 rounded-lg resize-none border border-gray-300 bg-white focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                                placeholder="답변을 입력해주세요"
+                                disabled
+                              />
+                            </div>
+                          )}
 
-                        {question.question_type === "rating" && (
-                          <div>
-                            {/* 별점 척도 라벨 표시 */}
-                            {(question.rating_min_label ||
-                              question.rating_max_label) && (
-                              <div className="flex justify-between items-center mb-3 px-2 text-sm text-gray-600">
-                                <span className="font-medium">
-                                  1점:{" "}
+                          {question.question_type === "rating" && (
+                            <div>
+                              <div className="flex justify-between text-sm mb-4 px-0 text-gray-600">
+                                <span>
                                   {question.rating_min_label || "매우 불만족"}
                                 </span>
-                                <span className="font-medium">
-                                  5점:{" "}
+                                <span>
                                   {question.rating_max_label || "매우 만족"}
                                 </span>
                               </div>
-                            )}
 
-                            <div className="flex items-center space-x-1">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <span
-                                  key={star}
-                                  className="text-2xl text-yellow-400"
-                                >
-                                  ★
-                                </span>
-                              ))}
-                              <span className="ml-3 text-sm text-gray-500">
-                                (1-5점)
-                              </span>
+                              <div className="grid grid-cols-5 gap-2">
+                                {[1, 2, 3, 4, 5].map((ratingValue) => (
+                                  <label
+                                    key={ratingValue}
+                                    className="block p-4 rounded-lg text-center cursor-pointer border border-gray-300 bg-white"
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`preview_q_${index}`}
+                                      value={ratingValue}
+                                      className="sr-only"
+                                      disabled
+                                    />
+                                    <div className="text-lg font-bold text-gray-900">
+                                      {ratingValue}
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {(question.question_type === "single_choice" ||
-                          question.question_type === "multiple_choice") && (
-                          <div className="space-y-2">
-                            {(question.choices_text || []).map(
-                              (choice, choiceIndex) => (
-                                <label
-                                  key={choiceIndex}
-                                  className="flex items-center text-gray-700"
-                                >
-                                  <input
-                                    type={
-                                      question.question_type === "single_choice"
-                                        ? "radio"
-                                        : "checkbox"
-                                    }
-                                    name={`preview_q_${index}`}
-                                    className="mr-2"
-                                    disabled
-                                  />
-                                  {choice}
-                                </label>
-                              )
-                            )}
-                          </div>
-                        )}
+                          {(question.question_type === "single_choice" ||
+                            question.question_type === "multiple_choice") && (
+                            <div className="space-y-3">
+                              {(question.choices_text || []).map(
+                                (choice, choiceIndex) => (
+                                  <label
+                                    key={choiceIndex}
+                                    className="block p-4 rounded-lg cursor-pointer border border-gray-300 bg-white"
+                                  >
+                                    <div className="flex items-center">
+                                      <input
+                                        type={
+                                          question.question_type ===
+                                          "single_choice"
+                                            ? "radio"
+                                            : "checkbox"
+                                        }
+                                        name={`preview_q_${index}`}
+                                        className="mr-3"
+                                        disabled
+                                      />
+                                      <span className="text-gray-900">
+                                        {choice}
+                                      </span>
+                                    </div>
+                                  </label>
+                                )
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
+
+                    {/* 제출 버튼 */}
+                    <div className="bg-white rounded-lg shadow-sm p-6">
+                      <button
+                        className="w-full py-3 px-4 bg-gray-900 text-white font-medium rounded-lg"
+                        disabled
+                      >
+                        설문 완료
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

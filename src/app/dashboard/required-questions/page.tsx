@@ -16,6 +16,7 @@ import {
   Trash2,
   Settings,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 
 interface RequiredQuestion {
   id: string;
@@ -52,26 +53,36 @@ export default function RequiredQuestionsPage() {
   const [editForm, setEditForm] = useState({
     question_text: "",
     description: "",
-    rating_min_label: "",
-    rating_max_label: "",
-  });
-
-  // 모달 상태들
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [questionToDelete, setQuestionToDelete] =
-    useState<RequiredQuestion | null>(null);
-
-  const [newQuestionForm, setNewQuestionForm] = useState({
-    question_text: "",
-    description: "",
-    category: "",
     question_type: "rating",
     rating_min_label: "",
     rating_max_label: "",
+    choices_text: [""],
   });
 
   const router = useRouter();
+
+  // 카테고리 라벨 번역
+  const getCategoryLabel = (category: string) => {
+    const categoryLabels = {
+      revisit_intention: "재방문의사",
+      recommendation: "추천의사",
+      overall_satisfaction: "전반적 만족도",
+      visit_frequency: "방문빈도",
+      service_quality: "서비스 품질",
+      value_for_money: "가격 대비 만족도",
+      customer_service: "고객 서비스",
+      cleanliness: "청결도",
+      accessibility: "접근성",
+      waiting_time: "대기시간",
+      food_quality: "음식 품질",
+      food_portion: "음식 양",
+      atmosphere: "매장 분위기",
+      menu_variety: "메뉴 다양성",
+      payment_convenience: "결제 편의성",
+      custom: "기타",
+    };
+    return categoryLabels[category as keyof typeof categoryLabels] || category;
+  };
 
   // 카테고리별 기본값 정의
   const categoryDefaults = {
@@ -94,6 +105,13 @@ export default function RequiredQuestionsPage() {
       rating_min_label: "매우 불만족",
       rating_max_label: "매우 만족",
     },
+    visit_frequency: {
+      question_text: "이 가게를 얼마나 자주 이용하시나요?",
+      description:
+        "고객의 방문 빈도를 파악하여 충성도와 재방문 패턴을 분석합니다",
+      rating_min_label: "",
+      rating_max_label: "",
+    },
     service_quality: {
       question_text: "저희 가게의 서비스 품질은 어떠셨나요?",
       description: "직원 서비스의 전문성과 친절도를 평가합니다",
@@ -112,11 +130,54 @@ export default function RequiredQuestionsPage() {
       rating_min_label: "매우 불친절",
       rating_max_label: "매우 친절",
     },
-    product_quality: {
-      question_text: "제품/음식의 품질은 어떠셨나요?",
-      description: "제공된 제품이나 음식의 맛, 신선도, 품질을 평가합니다",
-      rating_min_label: "매우 나쁨",
+    cleanliness: {
+      question_text: "매장의 청결 상태는 어떠셨나요?",
+      description: "매장과 시설의 청결 상태를 평가합니다",
+      rating_min_label: "매우 더러움",
+      rating_max_label: "매우 깨끗함",
+    },
+    accessibility: {
+      question_text: "가게 위치의 접근성은 어떠셨나요?",
+      description: "가게 위치, 교통편, 주차 등의 접근성을 평가합니다",
+      rating_min_label: "매우 불편",
+      rating_max_label: "매우 편리",
+    },
+    waiting_time: {
+      question_text: "주문부터 음식이 나오기까지의 대기시간은 어떠셨나요?",
+      description: "서비스 속도와 대기시간에 대한 고객 만족도를 측정합니다",
+      rating_min_label: "너무 오래 걸림",
+      rating_max_label: "매우 빠름",
+    },
+    food_quality: {
+      question_text: "음식의 맛과 품질은 어떠셨나요?",
+      description: "음식의 맛, 신선도, 품질을 종합적으로 평가합니다",
+      rating_min_label: "매우 실망스러움",
+      rating_max_label: "매우 맛있음",
+    },
+    food_portion: {
+      question_text: "음식의 양은 어떠셨나요?",
+      description: "제공된 음식의 양에 대한 만족도를 측정합니다",
+      rating_min_label: "너무 적음",
+      rating_max_label: "충분함",
+    },
+    atmosphere: {
+      question_text: "매장의 분위기는 어떠셨나요?",
+      description:
+        "매장의 인테리어, 음악, 조명 등 전반적인 분위기를 평가합니다",
+      rating_min_label: "매우 불쾌함",
       rating_max_label: "매우 좋음",
+    },
+    menu_variety: {
+      question_text: "메뉴의 다양성은 어떠셨나요?",
+      description: "메뉴의 종류와 선택권의 다양성을 평가합니다",
+      rating_min_label: "매우 부족함",
+      rating_max_label: "매우 다양함",
+    },
+    payment_convenience: {
+      question_text: "결제 방법이 얼마나 편리하셨나요?",
+      description: "고객이 선호하는 결제 방법을 파악합니다",
+      rating_min_label: "매우 불편",
+      rating_max_label: "매우 편리",
     },
     custom: {
       question_text: "",
@@ -124,22 +185,6 @@ export default function RequiredQuestionsPage() {
       rating_min_label: "매우 불만족",
       rating_max_label: "매우 만족",
     },
-  };
-
-  // 카테고리 변경 처리 함수
-  const handleCategoryChange = (category: string) => {
-    const defaults =
-      categoryDefaults[category as keyof typeof categoryDefaults];
-    if (defaults) {
-      setNewQuestionForm({
-        ...newQuestionForm,
-        category,
-        question_text: defaults.question_text,
-        description: defaults.description,
-        rating_min_label: defaults.rating_min_label,
-        rating_max_label: defaults.rating_max_label,
-      });
-    }
   };
 
   // 편집 모드에서 카테고리 변경 처리 함수
@@ -153,6 +198,19 @@ export default function RequiredQuestionsPage() {
         description: defaults.description,
         rating_min_label: defaults.rating_min_label,
         rating_max_label: defaults.rating_max_label,
+        question_type:
+          category === "visit_frequency" ? "single_choice" : "rating",
+        choices_text:
+          category === "visit_frequency"
+            ? [
+                "이번이 처음",
+                "1년에 1-2번",
+                "몇 달에 한 번",
+                "한 달에 1-2번",
+                "주 1-2회",
+                "거의 매일",
+              ]
+            : [""],
       });
     }
   };
@@ -175,8 +233,46 @@ export default function RequiredQuestionsPage() {
       setUser(session.user);
 
       try {
-        // 사용자의 필수 질문 설정 조회 (활성화된 질문만)
+        // 모든 필수 질문 조회 (활성화된 질문만)
+        const { data: allQuestions, error: allError } = await supabase
+          .from("required_questions")
+          .select("*")
+          .eq("is_active", true)
+          .order("order_num");
+
+        if (allError) {
+          console.error("Error fetching required questions:", allError);
+          setLoading(false);
+          return;
+        }
+
+        setAvailableQuestions(allQuestions || []);
+
+        // 사용자의 필수 질문 설정 조회
         const { data: userQuestions, error: userError } = await supabase
+          .from("user_required_questions")
+          .select("*")
+          .eq("user_id", session.user.id);
+
+        const existingQuestionIds = new Set(
+          (userQuestions || []).map((uq) => uq.required_question_id)
+        );
+
+        // 아직 설정하지 않은 질문들을 자동으로 추가 (모든 질문을 사용자 설정에 포함)
+        const newQuestions = (allQuestions || [])
+          .filter((q) => !existingQuestionIds.has(q.id))
+          .map((q) => ({
+            user_id: session.user.id,
+            required_question_id: q.id,
+            is_enabled: q.is_active, // 기본 활성화 상태를 따름
+          }));
+
+        if (newQuestions.length > 0) {
+          await supabase.from("user_required_questions").insert(newQuestions);
+        }
+
+        // 업데이트된 사용자 질문 설정 조회
+        const { data: finalUserQuestions, error: finalError } = await supabase
           .from("user_required_questions")
           .select(
             `
@@ -187,58 +283,10 @@ export default function RequiredQuestionsPage() {
           .eq("user_id", session.user.id)
           .eq("required_questions.is_active", true);
 
-        if (userError) {
-          console.error("Error fetching user required questions:", userError);
+        if (finalError) {
+          console.error("Error fetching final user questions:", finalError);
         } else {
-          setUserRequiredQuestions(userQuestions || []);
-        }
-
-        // 모든 활성 필수 질문 조회
-        const { data: allQuestions, error: allError } = await supabase
-          .from("required_questions")
-          .select("*")
-          .eq("is_active", true)
-          .order("order_num");
-
-        if (allError) {
-          console.error("Error fetching required questions:", allError);
-        } else {
-          setAvailableQuestions(allQuestions || []);
-
-          // 사용자가 아직 설정하지 않은 질문들을 자동으로 추가
-          const existingQuestionIds = new Set(
-            (userQuestions || []).map((uq) => uq.required_question_id)
-          );
-
-          const newQuestions = (allQuestions || [])
-            .filter((q) => !existingQuestionIds.has(q.id))
-            .map((q) => ({
-              user_id: session.user.id,
-              required_question_id: q.id,
-              is_enabled: true, // 새로운 질문은 기본적으로 활성화
-            }));
-
-          if (newQuestions.length > 0) {
-            const { error: insertError } = await supabase
-              .from("user_required_questions")
-              .insert(newQuestions);
-
-            if (!insertError) {
-              // 다시 조회하여 업데이트
-              const { data: updatedUserQuestions } = await supabase
-                .from("user_required_questions")
-                .select(
-                  `
-                  *,
-                  required_questions!inner(*)
-                `
-                )
-                .eq("user_id", session.user.id)
-                .eq("required_questions.is_active", true);
-
-              setUserRequiredQuestions(updatedUserQuestions || []);
-            }
-          }
+          setUserRequiredQuestions(finalUserQuestions || []);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -283,8 +331,10 @@ export default function RequiredQuestionsPage() {
     setEditForm({
       question_text: question.question_text,
       description: question.description,
+      question_type: question.question_type,
       rating_min_label: question.options?.rating_min_label || "",
       rating_max_label: question.options?.rating_max_label || "",
+      choices_text: question.options?.choices_text || [""],
     });
   };
 
@@ -294,17 +344,37 @@ export default function RequiredQuestionsPage() {
     setSaving(true);
     try {
       const question = availableQuestions.find((q) => q.id === editingQuestion);
-      const updatedOptions = { ...question?.options };
+      let updatedOptions: any = {};
 
-      if (question?.question_type === "rating") {
-        updatedOptions.rating_min_label = editForm.rating_min_label;
-        updatedOptions.rating_max_label = editForm.rating_max_label;
+      // 질문 유형에 따라 옵션 설정
+      if (editForm.question_type === "rating") {
+        updatedOptions = {
+          required: false,
+          maxRating: 5,
+          rating_min_label: editForm.rating_min_label,
+          rating_max_label: editForm.rating_max_label,
+        };
+      } else if (editForm.question_type === "single_choice") {
+        updatedOptions = {
+          choices_text: editForm.choices_text.filter(
+            (choice) => choice.trim() !== ""
+          ),
+          choice_ids: editForm.choices_text
+            .filter((choice) => choice.trim() !== "")
+            .map((_, index) => `choice_${index + 1}`),
+          isMultiSelect: false,
+        };
+      } else if (editForm.question_type === "text") {
+        updatedOptions = {
+          required: false,
+        };
       }
 
       const { error } = await supabase
         .from("required_questions")
         .update({
           question_text: editForm.question_text,
+          question_type: editForm.question_type,
           description: editForm.description,
           options: updatedOptions,
           updated_at: new Date().toISOString(),
@@ -322,6 +392,7 @@ export default function RequiredQuestionsPage() {
               ? {
                   ...q,
                   question_text: editForm.question_text,
+                  question_type: editForm.question_type,
                   description: editForm.description,
                   options: updatedOptions,
                 }
@@ -337,6 +408,7 @@ export default function RequiredQuestionsPage() {
                   required_questions: {
                     ...uq.required_questions,
                     question_text: editForm.question_text,
+                    question_type: editForm.question_type,
                     description: editForm.description,
                     options: updatedOptions,
                   },
@@ -349,8 +421,10 @@ export default function RequiredQuestionsPage() {
         setEditForm({
           question_text: "",
           description: "",
+          question_type: "rating",
           rating_min_label: "",
           rating_max_label: "",
+          choices_text: [""],
         });
       }
     } catch (error) {
@@ -360,127 +434,19 @@ export default function RequiredQuestionsPage() {
     setSaving(false);
   };
 
-  const addNewQuestion = async () => {
-    if (!newQuestionForm.question_text || !newQuestionForm.category) {
-      alert("질문 내용과 카테고리를 입력해주세요.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      let options: any = { maxRating: 5, required: true };
-
-      if (newQuestionForm.question_type === "rating") {
-        options = {
-          ...options,
-          rating_min_label: newQuestionForm.rating_min_label || "매우 불만족",
-          rating_max_label: newQuestionForm.rating_max_label || "매우 만족",
-        };
-      }
-
-      // 새 필수 질문 생성
-      const { data: newQuestion, error: insertError } = await supabase
-        .from("required_questions")
-        .insert({
-          question_text: newQuestionForm.question_text,
-          question_type: newQuestionForm.question_type,
-          options: options,
-          category: newQuestionForm.category,
-          description: newQuestionForm.description,
-          order_num: availableQuestions.length + 1,
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        console.error("Error creating question:", insertError);
-        alert("질문 생성 중 오류가 발생했습니다.");
-        setSaving(false);
-        return;
-      }
-
-      // 현재 사용자의 설정에 추가
-      const { data: userQuestion } = await supabase
-        .from("user_required_questions")
-        .insert({
-          user_id: user!.id,
-          required_question_id: newQuestion.id,
-          is_enabled: true,
-        })
-        .select(
-          `
-          *,
-          required_questions(*)
-        `
-        )
-        .single();
-
-      if (userQuestion) {
-        setUserRequiredQuestions((prev) => [...prev, userQuestion]);
-      }
-
-      setAvailableQuestions((prev) => [...prev, newQuestion]);
-      setShowAddModal(false);
-      setNewQuestionForm({
-        question_text: "",
-        description: "",
-        category: "",
-        question_type: "rating",
-        rating_min_label: "",
-        rating_max_label: "",
-      });
-    } catch (error) {
-      console.error("Error:", error);
-      alert("질문 생성 중 오류가 발생했습니다.");
-    }
-    setSaving(false);
-  };
-
-  const confirmDelete = (question: RequiredQuestion) => {
-    setQuestionToDelete(question);
-    setShowDeleteModal(true);
-  };
-
-  const deleteQuestion = async () => {
-    if (!questionToDelete) return;
-
-    setSaving(true);
-    try {
-      // 필수질문을 비활성화 (완전 삭제하지 않음)
-      const { error } = await supabase
-        .from("required_questions")
-        .update({ is_active: false })
-        .eq("id", questionToDelete.id);
-
-      if (error) {
-        console.error("Error deleting question:", error);
-        alert("질문 삭제 중 오류가 발생했습니다.");
-      } else {
-        // 로컬 상태에서 제거
-        setAvailableQuestions((prev) =>
-          prev.filter((q) => q.id !== questionToDelete.id)
-        );
-        setUserRequiredQuestions((prev) =>
-          prev.filter((uq) => uq.required_question_id !== questionToDelete.id)
-        );
-
-        setShowDeleteModal(false);
-        setQuestionToDelete(null);
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      alert("질문 삭제 중 오류가 발생했습니다.");
-    }
-    setSaving(false);
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <CheckSquare className="h-8 w-8 animate-pulse text-green-600 mx-auto mb-4" />
-          <p className="text-gray-600">필수 질문 설정을 불러오는 중...</p>
-        </div>
+        <EmptyState
+          icon={({ className }) => (
+            <CheckSquare
+              className={`${className} animate-pulse text-green-600`}
+            />
+          )}
+          title="필수 질문 설정을 불러오는 중..."
+          description="잠시만 기다려 주세요."
+          variant="default"
+        />
       </div>
     );
   }
@@ -489,20 +455,11 @@ export default function RequiredQuestionsPage() {
     <div className="min-h-screen bg-white p-6">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">필수 질문 설정</h1>
-            <p className="text-gray-600 mt-2">
-              모든 설문에 자동으로 포함될 필수 질문들을 관리합니다.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            disabled={saving}
-            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Plus className="h-4 w-4 mr-2" />새 필수 질문 추가
-          </button>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">필수 질문 설정</h1>
+          <p className="text-gray-600 mt-2">
+            모든 설문에 자동으로 포함될 필수 질문들을 선택하고 수정하세요.
+          </p>
         </div>
 
         {/* 안내 메시지 */}
@@ -511,13 +468,59 @@ export default function RequiredQuestionsPage() {
             <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
             <div>
               <h3 className="text-sm font-medium text-blue-800">
-                필수 질문이란?
+                필수 질문 관리 방법
               </h3>
               <p className="text-sm text-blue-700 mt-1">
-                필수 질문은 모든 설문에 자동으로 포함되며, 삭제할 수 없습니다.
-                재방문의사, 추천의사 등 통계 분석에 필수적인 질문들을
-                설정하세요.
+                • <strong>토글 스위치</strong>로 질문을 포함/제외할 수 있습니다
+                <br />• <strong>수정 버튼</strong>으로 질문 내용과 설명을 변경할
+                수 있습니다
+                <br />• 기본적으로{" "}
+                <strong>
+                  재방문의사, 추천의사, 전반적 만족도, 방문빈도
+                </strong>{" "}
+                질문이 활성화되어 있습니다
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 통계 정보 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <CheckSquare className="h-5 w-5 text-green-600 mr-2" />
+              <div>
+                <p className="text-sm font-medium text-green-800">
+                  활성화된 질문
+                </p>
+                <p className="text-2xl font-bold text-green-600">
+                  {userRequiredQuestions.filter((q) => q.is_enabled).length}개
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <Square className="h-5 w-5 text-gray-600 mr-2" />
+              <div>
+                <p className="text-sm font-medium text-gray-800">
+                  비활성화된 질문
+                </p>
+                <p className="text-2xl font-bold text-gray-600">
+                  {userRequiredQuestions.filter((q) => !q.is_enabled).length}개
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <Settings className="h-5 w-5 text-blue-600 mr-2" />
+              <div>
+                <p className="text-sm font-medium text-blue-800">전체 질문</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {userRequiredQuestions.length}개
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -614,6 +617,9 @@ export default function RequiredQuestionsPage() {
                                 <option value="overall_satisfaction">
                                   전반적 만족도
                                 </option>
+                                <option value="visit_frequency">
+                                  방문빈도
+                                </option>
                                 <option value="service_quality">
                                   서비스 품질
                                 </option>
@@ -623,8 +629,17 @@ export default function RequiredQuestionsPage() {
                                 <option value="customer_service">
                                   고객 서비스
                                 </option>
-                                <option value="product_quality">
-                                  제품 품질
+                                <option value="cleanliness">청결도</option>
+                                <option value="accessibility">접근성</option>
+                                <option value="waiting_time">대기시간</option>
+                                <option value="food_quality">음식 품질</option>
+                                <option value="food_portion">음식 양</option>
+                                <option value="atmosphere">매장 분위기</option>
+                                <option value="menu_variety">
+                                  메뉴 다양성
+                                </option>
+                                <option value="payment_convenience">
+                                  결제 편의성
                                 </option>
                                 <option value="custom">기타</option>
                               </select>
@@ -653,7 +668,29 @@ export default function RequiredQuestionsPage() {
                               rows={2}
                               placeholder="설명"
                             />
-                            {question.question_type === "rating" && (
+
+                            {/* 질문 유형 선택 */}
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                질문 유형
+                              </label>
+                              <select
+                                value={editForm.question_type}
+                                onChange={(e) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    question_type: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                              >
+                                <option value="rating">별점 (1-5점)</option>
+                                <option value="single_choice">객관식</option>
+                                <option value="text">주관식</option>
+                              </select>
+                            </div>
+                            {/* 질문 유형별 옵션 설정 */}
+                            {editForm.question_type === "rating" && (
                               <div className="space-y-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                                 <label className="text-xs text-gray-600 font-medium">
                                   별점 척도 라벨 설정
@@ -696,6 +733,88 @@ export default function RequiredQuestionsPage() {
                                 </div>
                               </div>
                             )}
+
+                            {editForm.question_type === "single_choice" && (
+                              <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-xs text-gray-600 font-medium">
+                                    객관식 선택지 설정
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditForm({
+                                        ...editForm,
+                                        choices_text: [
+                                          ...editForm.choices_text,
+                                          "",
+                                        ],
+                                      });
+                                    }}
+                                    className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                                  >
+                                    + 선택지 추가
+                                  </button>
+                                </div>
+                                <div className="space-y-2">
+                                  {editForm.choices_text.map(
+                                    (choice, index) => (
+                                      <div
+                                        key={index}
+                                        className="flex items-center space-x-2"
+                                      >
+                                        <span className="text-xs text-gray-500 w-6">
+                                          {index + 1}.
+                                        </span>
+                                        <input
+                                          type="text"
+                                          value={choice}
+                                          onChange={(e) => {
+                                            const newChoices = [
+                                              ...editForm.choices_text,
+                                            ];
+                                            newChoices[index] = e.target.value;
+                                            setEditForm({
+                                              ...editForm,
+                                              choices_text: newChoices,
+                                            });
+                                          }}
+                                          placeholder={`선택지 ${index + 1}`}
+                                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                        />
+                                        {editForm.choices_text.length > 1 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const newChoices =
+                                                editForm.choices_text.filter(
+                                                  (_, i) => i !== index
+                                                );
+                                              setEditForm({
+                                                ...editForm,
+                                                choices_text: newChoices,
+                                              });
+                                            }}
+                                            className="text-red-500 hover:text-red-700 p-1"
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {editForm.question_type === "text" && (
+                              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-xs text-green-700">
+                                  주관식 질문은 별도 설정이 필요하지 않습니다.
+                                  고객이 자유롭게 텍스트로 답변할 수 있습니다.
+                                </p>
+                              </div>
+                            )}
                             <div className="flex space-x-2">
                               <button
                                 onClick={saveEdit}
@@ -711,8 +830,10 @@ export default function RequiredQuestionsPage() {
                                   setEditForm({
                                     question_text: "",
                                     description: "",
+                                    question_type: "rating",
                                     rating_min_label: "",
                                     rating_max_label: "",
+                                    choices_text: [""],
                                   });
                                 }}
                                 className="inline-flex items-center px-3 py-1 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700"
@@ -744,7 +865,9 @@ export default function RequiredQuestionsPage() {
                                 <Star className="h-3 w-3 mr-1" />
                                 {question.question_type === "rating"
                                   ? "별점"
-                                  : "텍스트"}
+                                  : question.question_type === "single_choice"
+                                  ? "객관식"
+                                  : "주관식"}
                               </span>
                               <span
                                 className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${
@@ -753,7 +876,7 @@ export default function RequiredQuestionsPage() {
                                     : "bg-gray-100 text-gray-500"
                                 }`}
                               >
-                                {question.category}
+                                {getCategoryLabel(question.category)}
                               </span>
 
                               {!userQuestion.is_enabled && (
@@ -773,6 +896,7 @@ export default function RequiredQuestionsPage() {
                                 {question.description}
                               </p>
                             )}
+                            {/* 질문 타입별 미리보기 */}
                             {question.question_type === "rating" &&
                               question.options?.rating_min_label && (
                                 <div
@@ -800,6 +924,57 @@ export default function RequiredQuestionsPage() {
                                   </div>
                                 </div>
                               )}
+
+                            {question.question_type === "single_choice" &&
+                              question.options?.choices_text && (
+                                <div
+                                  className={`border rounded-lg p-3 mb-3 ${
+                                    userQuestion.is_enabled
+                                      ? "bg-blue-50 border-blue-200"
+                                      : "bg-gray-50 border-gray-200"
+                                  }`}
+                                >
+                                  <div
+                                    className={`text-sm ${
+                                      userQuestion.is_enabled
+                                        ? "text-blue-800"
+                                        : "text-gray-500"
+                                    }`}
+                                  >
+                                    <strong>선택지:</strong>
+                                    <div className="mt-1 grid grid-cols-1 gap-1">
+                                      {question.options.choices_text.map(
+                                        (choice: string, index: number) => (
+                                          <span key={index} className="text-xs">
+                                            {index + 1}. {choice}
+                                          </span>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                            {question.question_type === "text" && (
+                              <div
+                                className={`border rounded-lg p-3 mb-3 ${
+                                  userQuestion.is_enabled
+                                    ? "bg-green-50 border-green-200"
+                                    : "bg-gray-50 border-gray-200"
+                                }`}
+                              >
+                                <p
+                                  className={`text-sm ${
+                                    userQuestion.is_enabled
+                                      ? "text-green-800"
+                                      : "text-gray-500"
+                                  }`}
+                                >
+                                  <strong>주관식:</strong> 고객이 자유롭게
+                                  텍스트로 답변
+                                </p>
+                              </div>
+                            )}
                             <div
                               className={`flex items-center space-x-4 text-xs ${
                                 userQuestion.is_enabled
@@ -838,13 +1013,6 @@ export default function RequiredQuestionsPage() {
                           title="질문 수정"
                         >
                           <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(question)}
-                          className="p-2 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50"
-                          title="질문 삭제"
-                        >
-                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     )}
@@ -928,267 +1096,6 @@ export default function RequiredQuestionsPage() {
           )}
         </div>
       </div>
-
-      {/* 새 질문 추가 모달 */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  새 필수 질문 추가
-                </h3>
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  카테고리 *{" "}
-                  <span className="text-xs text-gray-500">
-                    (선택하면 적합한 질문이 자동으로 설정됩니다)
-                  </span>
-                </label>
-                <select
-                  value={newQuestionForm.category}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="">카테고리를 선택해주세요</option>
-                  <option value="revisit_intention">재방문의사</option>
-                  <option value="recommendation">추천의사</option>
-                  <option value="overall_satisfaction">전반적 만족도</option>
-                  <option value="service_quality">서비스 품질</option>
-                  <option value="value_for_money">가격 대비 만족도</option>
-                  <option value="customer_service">고객 서비스</option>
-                  <option value="product_quality">제품 품질</option>
-                  <option value="custom">기타 (직접 입력)</option>
-                </select>
-
-                {/* {newQuestionForm.category &&
-                  newQuestionForm.category !== "custom" && (
-                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex items-start">
-                        <CheckSquare className="h-4 w-4 text-green-600 mt-0.5 mr-2" />
-                        <div className="text-sm">
-                          <p className="text-green-800 font-medium">
-                            자동 설정된 내용:
-                          </p>
-                          <p className="text-green-700 mt-1">
-                            <strong>질문:</strong>{" "}
-                            {
-                              categoryDefaults[
-                                newQuestionForm.category as keyof typeof categoryDefaults
-                              ]?.question_text
-                            }
-                          </p>
-                          <p className="text-green-700 mt-1">
-                            <strong>척도:</strong>{" "}
-                            {
-                              categoryDefaults[
-                                newQuestionForm.category as keyof typeof categoryDefaults
-                              ]?.rating_min_label
-                            }{" "}
-                            →{" "}
-                            {
-                              categoryDefaults[
-                                newQuestionForm.category as keyof typeof categoryDefaults
-                              ]?.rating_max_label
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )} */}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  질문 내용 *
-                </label>
-                <input
-                  type="text"
-                  value={newQuestionForm.question_text}
-                  onChange={(e) =>
-                    setNewQuestionForm({
-                      ...newQuestionForm,
-                      question_text: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  placeholder="예: 서비스에 얼마나 만족하셨나요?"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  설명 (선택사항)
-                </label>
-                <textarea
-                  value={newQuestionForm.description}
-                  onChange={(e) =>
-                    setNewQuestionForm({
-                      ...newQuestionForm,
-                      description: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  rows={2}
-                  placeholder="이 질문이 측정하는 내용을 설명해주세요."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  질문 유형
-                </label>
-                <select
-                  value={newQuestionForm.question_type}
-                  onChange={(e) =>
-                    setNewQuestionForm({
-                      ...newQuestionForm,
-                      question_type: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="rating">별점 평가 (1-5점)</option>
-                  <option value="text">주관식 (텍스트)</option>
-                </select>
-              </div>
-
-              {newQuestionForm.question_type === "rating" && (
-                <div className="space-y-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <label className="block text-sm font-medium text-gray-700">
-                    별점 척도 라벨 설정
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        1점 기준 (최소값)
-                      </label>
-                      <input
-                        type="text"
-                        value={newQuestionForm.rating_min_label}
-                        onChange={(e) =>
-                          setNewQuestionForm({
-                            ...newQuestionForm,
-                            rating_min_label: e.target.value,
-                          })
-                        }
-                        placeholder="예: 매우 불만족"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        5점 기준 (최대값)
-                      </label>
-                      <input
-                        type="text"
-                        value={newQuestionForm.rating_max_label}
-                        onChange={(e) =>
-                          setNewQuestionForm({
-                            ...newQuestionForm,
-                            rating_max_label: e.target.value,
-                          })
-                        }
-                        placeholder="예: 매우 만족"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  setNewQuestionForm({
-                    question_text: "",
-                    description: "",
-                    category: "",
-                    question_type: "rating",
-                    rating_min_label: "",
-                    rating_max_label: "",
-                  });
-                }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                onClick={addNewQuestion}
-                disabled={
-                  saving ||
-                  !newQuestionForm.question_text ||
-                  !newQuestionForm.category
-                }
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? "추가 중..." : "질문 추가"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 삭제 확인 모달 */}
-      {showDeleteModal && questionToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  질문 삭제 확인
-                </h3>
-              </div>
-
-              <p className="text-gray-600 mb-4">
-                "<strong>{questionToDelete.question_text}</strong>" 질문을
-                삭제하시겠습니까?
-              </p>
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                <p className="text-sm text-yellow-800">
-                  <strong>주의:</strong> 이 질문을 사용하는 기존 설문의 응답
-                  데이터는 유지되지만, 새로운 설문에는 포함되지 않습니다.
-                </p>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setQuestionToDelete(null);
-                }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                취소
-              </button>
-              <button
-                onClick={deleteQuestion}
-                disabled={saving}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {saving ? "삭제 중..." : "삭제"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
