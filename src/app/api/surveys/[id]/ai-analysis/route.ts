@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { GoogleGenAI } from "@google/genai";
 

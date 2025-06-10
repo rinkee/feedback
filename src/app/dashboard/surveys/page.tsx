@@ -36,23 +36,6 @@ export default function SurveysPage() {
   const [toggleLoading, setToggleLoading] = useState<string | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchSurveys();
-    
-    // 외부 클릭시 드롭다운 닫기
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest(".dropdown-container")) {
-        setOpenDropdown(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [fetchSurveys]);
-
   const fetchSurveys = useCallback(async () => {
     try {
       setLoading(true);
@@ -124,13 +107,11 @@ export default function SurveysPage() {
       }
 
       // 로컬 상태 업데이트
-      setSurveys((prev) =>
-        prev.map((survey) => ({
-          ...survey,
-          is_active: survey.id === surveyId ? !currentActive : false,
-        }))
-      );
-
+      const updatedSurveys = surveys.map((survey) => ({
+        ...survey,
+        is_active: survey.id === surveyId ? !currentActive : false,
+      }));
+      setSurveys(updatedSurveys);
       alert(
         currentActive
           ? "설문이 비활성화되었습니다."
@@ -211,7 +192,8 @@ export default function SurveysPage() {
       }
 
       // Refresh the list
-      setSurveys((prev) => prev.filter((survey) => survey.id !== surveyId));
+      const updatedSurveys = surveys.filter((survey) => survey.id !== surveyId);
+      setSurveys(updatedSurveys);
       alert("설문이 성공적으로 삭제되었습니다.");
     } catch (err: unknown) {
       const error = err as Error;
@@ -231,6 +213,23 @@ export default function SurveysPage() {
       alert("클립보드 복사에 실패했습니다.");
     }
   };
+
+  useEffect(() => {
+    fetchSurveys();
+
+    // 외부 클릭시 드롭다운 닫기
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".dropdown-container")) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [fetchSurveys]);
 
   if (loading) {
     return (
@@ -313,14 +312,6 @@ export default function SurveysPage() {
               icon={BarChart3}
               title="첫 설문을 만들어보세요!"
               description="아직 생성된 설문이 없습니다. 새 설문을 만들어 고객 피드백 수집을 시작하세요."
-              action={
-                <Link
-                  href="/dashboard/surveys/new"
-                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
-                >
-                  <Plus size={16} className="mr-2" />새 설문 만들기
-                </Link>
-              }
               variant="default"
             />
           </div>

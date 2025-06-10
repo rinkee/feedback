@@ -213,82 +213,84 @@ export default function SurveyViewPage() {
         console.log("Questions data:", questionsData);
 
         // 질문 데이터 형식 변환
-        const formattedQuestions = questionsData.map((q: DBQuestion): Question => {
-          const dbQuestionType = q.question_type;
-          let feQuestionType: Question["type"];
+        const formattedQuestions = questionsData.map(
+          (q: DBQuestion): Question => {
+            const dbQuestionType = q.question_type;
+            let feQuestionType: Question["type"];
 
-          if (typeof dbQuestionType === "string") {
-            if (
-              dbQuestionType === "text" ||
-              dbQuestionType === "textarea" ||
-              dbQuestionType === "short_text"
-            ) {
-              feQuestionType = "textarea";
-            } else if (dbQuestionType === "rating") {
-              feQuestionType = "rating";
-            } else if (
-              dbQuestionType === "select" ||
-              dbQuestionType === "single_choice" ||
-              dbQuestionType === "multiple_choice" ||
-              dbQuestionType === "boolean"
-            ) {
-              feQuestionType = "select";
+            if (typeof dbQuestionType === "string") {
+              if (
+                dbQuestionType === "text" ||
+                dbQuestionType === "textarea" ||
+                dbQuestionType === "short_text"
+              ) {
+                feQuestionType = "textarea";
+              } else if (dbQuestionType === "rating") {
+                feQuestionType = "rating";
+              } else if (
+                dbQuestionType === "select" ||
+                dbQuestionType === "single_choice" ||
+                dbQuestionType === "multiple_choice" ||
+                dbQuestionType === "boolean"
+              ) {
+                feQuestionType = "select";
+              } else {
+                console.warn(
+                  `Unknown string question type from DB: ${dbQuestionType} for question ID ${q.id}, defaulting to textarea.`
+                );
+                feQuestionType = "textarea"; // Default for unknown string types
+              }
             } else {
+              // Handle null, undefined, or non-string dbQuestionType
               console.warn(
-                `Unknown string question type from DB: ${dbQuestionType} for question ID ${q.id}, defaulting to textarea.`
+                `Question type from DB is not a string (value: ${dbQuestionType}) for question ID ${q.id}, defaulting to textarea.`
               );
-              feQuestionType = "textarea"; // Default for unknown string types
+              feQuestionType = "textarea"; // Default if type is missing or not a string
             }
-          } else {
-            // Handle null, undefined, or non-string dbQuestionType
-            console.warn(
-              `Question type from DB is not a string (value: ${dbQuestionType}) for question ID ${q.id}, defaulting to textarea.`
+
+            const dbOptions = q.options; // q.options is the JSONB field from the database
+
+            // 필수질문 카테고리 확인 - 디버그 로그 추가
+            const requiredQuestionCategory =
+              q.required_questions?.category || null;
+            console.log(
+              `질문 "${q.question_text.substring(
+                0,
+                30
+              )}..." - required_question_id: ${
+                q.required_question_id
+              }, category: ${requiredQuestionCategory}`
             );
-            feQuestionType = "textarea"; // Default if type is missing or not a string
+
+            return {
+              id: q.id,
+              text: q.question_text,
+              type: feQuestionType,
+              options: dbOptions?.choices_text
+                ? dbOptions.choices_text.map((text: string, index: number) => ({
+                    id: `choice_${index + 1}`,
+                    text: text,
+                  }))
+                : undefined,
+              isMultiSelect:
+                feQuestionType === "select" &&
+                (dbQuestionType === "multiple_choice" || // dbQuestionType could be string here
+                  dbOptions?.isMultiSelect === true),
+              required: q.is_required,
+              placeholder: dbOptions?.placeholder,
+              maxRating: dbOptions?.maxRating || 5,
+              labels: dbOptions?.labels, // For specific rating point labels if ever used
+              rating_min_label: dbOptions?.rating_min_label,
+              rating_max_label: dbOptions?.rating_max_label,
+              original_question_type:
+                typeof dbQuestionType === "string"
+                  ? dbQuestionType
+                  : String(dbQuestionType), // Store original, ensure string
+              original_options: dbOptions || undefined,
+              required_question_category: requiredQuestionCategory || undefined,
+            };
           }
-
-          const dbOptions = q.options; // q.options is the JSONB field from the database
-
-          // 필수질문 카테고리 확인 - 디버그 로그 추가
-          const requiredQuestionCategory =
-            q.required_questions?.category || null;
-          console.log(
-            `질문 "${q.question_text.substring(
-              0,
-              30
-            )}..." - required_question_id: ${
-              q.required_question_id
-            }, category: ${requiredQuestionCategory}`
-          );
-
-          return {
-            id: q.id,
-            text: q.question_text,
-            type: feQuestionType,
-            options: dbOptions?.choices_text
-              ? dbOptions.choices_text.map((text: string, index: number) => ({
-                  id: `choice_${index + 1}`,
-                  text: text,
-                }))
-              : undefined,
-            isMultiSelect:
-              feQuestionType === "select" &&
-              (dbQuestionType === "multiple_choice" || // dbQuestionType could be string here
-                dbOptions?.isMultiSelect === true),
-            required: q.is_required,
-            placeholder: dbOptions?.placeholder,
-            maxRating: dbOptions?.maxRating || 5,
-            labels: dbOptions?.labels, // For specific rating point labels if ever used
-            rating_min_label: dbOptions?.rating_min_label,
-            rating_max_label: dbOptions?.rating_max_label,
-            original_question_type:
-              typeof dbQuestionType === "string"
-                ? dbQuestionType
-                : String(dbQuestionType), // Store original, ensure string
-            original_options: dbOptions || undefined,
-            required_question_category: requiredQuestionCategory || undefined,
-          };
-        });
+        );
 
         setSurvey({
           id: surveyData.id,
@@ -315,42 +317,46 @@ export default function SurveyViewPage() {
     isMultiSelect?: boolean,
     optionId?: string
   ) => {
-    setAnswers((prevAnswers) => {
-      const newAnswers = { ...prevAnswers };
-      const currentAnswerForQuestion: Answer = newAnswers[questionId]
-        ? { ...newAnswers[questionId] }
-        : { question_id: questionId };
+    // 1. 현재 answers 상태를 복사하여 새 객체를 만듭니다.
+    const newAnswers = { ...answers };
 
-      if (questionType === "textarea") {
-        currentAnswerForQuestion.response_text = value as string;
-        currentAnswerForQuestion.selected_option_ids = null;
-        currentAnswerForQuestion.rating = null;
-      } else if (questionType === "rating") {
-        currentAnswerForQuestion.rating = value as number;
-        currentAnswerForQuestion.selected_option_ids = null;
-        currentAnswerForQuestion.response_text = null;
-      } else if (questionType === "select") {
-        if (isMultiSelect && optionId) {
-          const currentSelected =
-            currentAnswerForQuestion.selected_option_ids || [];
-          if (currentSelected.includes(optionId)) {
-            currentAnswerForQuestion.selected_option_ids =
-              currentSelected.filter((id) => id !== optionId);
-          } else {
-            currentAnswerForQuestion.selected_option_ids = [
-              ...currentSelected,
-              optionId,
-            ];
-          }
+    // 2. 새 객체에 대한 변경 로직을 수행합니다.
+    const currentAnswerForQuestion: Answer = newAnswers[questionId]
+      ? { ...newAnswers[questionId] }
+      : { question_id: questionId };
+
+    if (questionType === "textarea") {
+      currentAnswerForQuestion.response_text = value as string;
+      currentAnswerForQuestion.selected_option_ids = null;
+      currentAnswerForQuestion.rating = null;
+    } else if (questionType === "rating") {
+      currentAnswerForQuestion.rating = value as number;
+      currentAnswerForQuestion.selected_option_ids = null;
+      currentAnswerForQuestion.response_text = null;
+    } else if (questionType === "select") {
+      if (isMultiSelect && optionId) {
+        const currentSelected =
+          currentAnswerForQuestion.selected_option_ids || [];
+        if (currentSelected.includes(optionId)) {
+          currentAnswerForQuestion.selected_option_ids = currentSelected.filter(
+            (id) => id !== optionId
+          );
         } else {
-          currentAnswerForQuestion.selected_option_ids = [value as string];
+          currentAnswerForQuestion.selected_option_ids = [
+            ...currentSelected,
+            optionId,
+          ];
         }
-        currentAnswerForQuestion.response_text = null;
-        currentAnswerForQuestion.rating = null;
+      } else {
+        currentAnswerForQuestion.selected_option_ids = [value as string];
       }
-      newAnswers[questionId] = currentAnswerForQuestion;
-      return newAnswers;
-    });
+      currentAnswerForQuestion.response_text = null;
+      currentAnswerForQuestion.rating = null;
+    }
+    newAnswers[questionId] = currentAnswerForQuestion;
+
+    // 3. 완성된 새 객체를 상태로 설정합니다.
+    setAnswers(newAnswers);
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -473,7 +479,8 @@ export default function SurveyViewPage() {
 
       // 2. 설문 응답 처리
       const responsesToProcess: ResponseData[] = Object.values(answers)
-        .filter((ans: Answer) =>
+        .filter(
+          (ans: Answer) =>
             (ans.response_text && ans.response_text.trim() !== "") ||
             (ans.selected_option_ids && ans.selected_option_ids.length > 0) ||
             typeof ans.rating === "number"
@@ -925,12 +932,13 @@ export default function SurveyViewPage() {
                 </label>
                 <select
                   value={customerInfo.age_group}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                    setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
-                      ...prev,
+                  onChange={(e) => {
+                    const newInfo = {
+                      ...customerInfo,
                       age_group: e.target.value,
-                    }))
-                  }
+                    };
+                    setCustomerInfo(newInfo);
+                  }}
                   className="w-full px-4 py-5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200"
                   required
                   disabled={submitting}
@@ -965,12 +973,14 @@ export default function SurveyViewPage() {
                         name="gender"
                         value={gender}
                         checked={customerInfo.gender === gender}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
-                            ...prev,
+                        onChange={(e) => {
+                          // 올바른 방식으로 수정
+                          const newInfo = {
+                            ...customerInfo,
                             gender: e.target.value,
-                          }))
-                        }
+                          };
+                          setCustomerInfo(newInfo);
+                        }}
                         className="sr-only"
                         required
                         disabled={submitting}
@@ -989,12 +999,11 @@ export default function SurveyViewPage() {
                 <input
                   type="text"
                   value={customerInfo.name}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
-                      ...prev,
-                      name: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => {
+                    // 올바른 방식으로 수정
+                    const newInfo = { ...customerInfo, name: e.target.value };
+                    setCustomerInfo(newInfo);
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200"
                   placeholder="이름을 입력해주세요"
                   disabled={submitting}
@@ -1010,12 +1019,11 @@ export default function SurveyViewPage() {
                 <input
                   type="tel"
                   value={customerInfo.phone}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
-                      ...prev,
-                      phone: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => {
+                    // 올바른 방식으로 수정
+                    const newInfo = { ...customerInfo, phone: e.target.value };
+                    setCustomerInfo(newInfo);
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-all duration-200"
                   placeholder="010-1234-5678"
                   disabled={submitting}

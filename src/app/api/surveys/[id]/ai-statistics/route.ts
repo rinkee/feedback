@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
 interface ResponseRecord {
-  rating?: number | null;
+  rating: number | 0;
   required_question_category?: string | null;
   selected_option?: string | null;
   customer_info_id: string;
@@ -117,6 +117,10 @@ function analyzeVisitFrequency(responses: ResponseRecord[]) {
 
   visitFreqResponses.forEach((r) => {
     const choice = r.selected_option;
+    if (!choice) {
+      return;
+    }
+
     if (choice === "choice_1") newCustomers++; // 이번이 처음
     else if (["choice_2", "choice_3"].includes(choice))
       regularCustomers++; // 1년에 1-2번, 몇 달에 한 번
@@ -503,12 +507,12 @@ function generateProfessionalInsights(
 }
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  request: Request,
+  { params }: { params: { id: string } }
+): Promise<Response> {
   try {
     console.log("=== 전문 AI 통계 분석 시작 ===");
-    const { id: surveyId } = await params;
+    const surveyId = params.id;
 
     const userId = "5e1f5903-b48d-4502-95cb-838df25fbf48";
 
@@ -523,7 +527,7 @@ export async function GET(
       return NextResponse.json(
         { error: "설문을 찾을 수 없습니다." },
         { status: 404 }
-      );
+      ) as Response;
     }
 
     // 최근 3개월 응답 데이터 조회
@@ -551,7 +555,7 @@ export async function GET(
       return NextResponse.json(
         { error: "응답 데이터를 불러올 수 없습니다." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     // 고객 정보 조회
@@ -564,7 +568,7 @@ export async function GET(
       return NextResponse.json(
         { error: "고객 데이터를 불러올 수 없습니다." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     console.log(
@@ -576,7 +580,7 @@ export async function GET(
         success: true,
         statistics: [],
         message: "분석할 데이터가 충분하지 않습니다.",
-      });
+      }) as Response;
     }
 
     // 전문적인 AI 분석 수행
@@ -626,11 +630,14 @@ export async function GET(
           customerSegments,
           visitFrequencyAnalysis,
           trends,
-          new Set(responses.map((r) => r.customer_info_id)).size,
+          new Set(responses.map((r: ResponseRecord) => r.customer_info_id))
+            .size,
           responses.length,
           responses
         ),
-        total_responses: new Set(responses.map((r) => r.customer_info_id)).size,
+        total_responses: new Set(
+          responses.map((r: ResponseRecord) => r.customer_info_id)
+        ).size,
         average_rating: csat / 20, // 5점 척도로 변환
         main_customer_age_group:
           customerSegments[0]?.segment.split(" ")[0] || "미분류",
@@ -673,22 +680,19 @@ export async function GET(
           opportunities: insights.opportunityAreas.length,
         },
       },
-    });
+    }) as Response;
   } catch (err: unknown) {
     const error = err as Error;
     console.error("=== AI 통계 분석 오류 ===", error);
     const message = error.message || "AI 분석 중 오류가 발생했습니다.";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 }) as Response;
   }
 }
 
 // AI 통계 재생성을 위한 POST 엔드포인트
 export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  request: Request,
+  { params }: { params: { id: string } }
+): Promise<Response> {
   return GET(request, { params });
 }
