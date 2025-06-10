@@ -24,7 +24,7 @@ interface Question {
   rating_min_label?: string;
   rating_max_label?: string;
   original_question_type?: string;
-  original_options?: Record<string, unknown>;
+  original_options?: DBOptions;
   required_question_category?: string;
 }
 
@@ -58,7 +58,6 @@ interface DBOptions {
   labels?: { [key: number]: string };
   rating_min_label?: string;
   rating_max_label?: string;
-  [key: string]: unknown;
 }
 
 interface DBQuestion {
@@ -286,8 +285,8 @@ export default function SurveyViewPage() {
               typeof dbQuestionType === "string"
                 ? dbQuestionType
                 : String(dbQuestionType), // Store original, ensure string
-            original_options: dbOptions as Record<string, unknown>,
-            required_question_category: requiredQuestionCategory,
+            original_options: dbOptions || undefined,
+            required_question_category: requiredQuestionCategory || undefined,
           };
         });
 
@@ -473,14 +472,13 @@ export default function SurveyViewPage() {
       }
 
       // 2. 설문 응답 처리
-      const responsesToProcess = Object.values(answers)
-        .filter(
-          (ans) =>
+      const responsesToProcess: ResponseData[] = Object.values(answers)
+        .filter((ans: Answer) =>
             (ans.response_text && ans.response_text.trim() !== "") ||
             (ans.selected_option_ids && ans.selected_option_ids.length > 0) ||
             typeof ans.rating === "number"
         )
-        .map((ans) => {
+        .map((ans: Answer) => {
           const question = survey!.questions.find(
             (q) => q.id === ans.question_id
           );
@@ -718,7 +716,7 @@ export default function SurveyViewPage() {
                         }`}
                         placeholder="답변을 입력해주세요"
                         value={answers[question.id]?.response_text || ""}
-                        onChange={(e) =>
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                           handleAnswerChange(
                             question.id,
                             e.target.value,
@@ -927,8 +925,8 @@ export default function SurveyViewPage() {
                 </label>
                 <select
                   value={customerInfo.age_group}
-                  onChange={(e) =>
-                    setCustomerInfo((prev) => ({
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                    setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
                       ...prev,
                       age_group: e.target.value,
                     }))
@@ -967,8 +965,8 @@ export default function SurveyViewPage() {
                         name="gender"
                         value={gender}
                         checked={customerInfo.gender === gender}
-                        onChange={(e) =>
-                          setCustomerInfo((prev) => ({
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
                             ...prev,
                             gender: e.target.value,
                           }))
@@ -991,8 +989,8 @@ export default function SurveyViewPage() {
                 <input
                   type="text"
                   value={customerInfo.name}
-                  onChange={(e) =>
-                    setCustomerInfo((prev) => ({
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
                       ...prev,
                       name: e.target.value,
                     }))
@@ -1012,8 +1010,8 @@ export default function SurveyViewPage() {
                 <input
                   type="tel"
                   value={customerInfo.phone}
-                  onChange={(e) =>
-                    setCustomerInfo((prev) => ({
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setCustomerInfo((prev: CustomerInfo): CustomerInfo => ({
                       ...prev,
                       phone: e.target.value,
                     }))

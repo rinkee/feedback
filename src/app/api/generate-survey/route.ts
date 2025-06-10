@@ -348,13 +348,11 @@ ${storeContext}
             console.log(`Success with ${model} on attempt ${attempt}`);
             break;
           }
-        } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(
-            `Error with ${model} attempt ${attempt}:`,
-            message
-          );
-          lastError = error as Error;
+        } catch (err: unknown) {
+          const error = err as Error;
+          const message = error.message || String(err);
+          console.error(`Error with ${model} attempt ${attempt}:`, message);
+          lastError = error;
 
           // 503 또는 429 에러인 경우 잠시 대기 후 재시도
           if (
@@ -459,10 +457,11 @@ ${storeContext}
         { status: 500 }
       );
     }
-  } catch (error: unknown) {
+  } catch (err: unknown) {
+    const error = err as Error;
     console.error("설문 생성 오류:", error);
 
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error.message || String(err);
     if (message.includes("API key")) {
       return NextResponse.json(
         { error: "AI 서비스 연결에 실패했습니다. API 키를 확인해주세요." },

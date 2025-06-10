@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
+interface ResponseRecord {
+  rating?: number | null;
+  required_question_category?: string | null;
+  selected_option?: string | null;
+  customer_info_id: string;
+  created_at: string;
+}
+
+interface CustomerRecord {
+  id: string;
+  age_group?: string | null;
+  gender?: string | null;
+}
+
 // 레스토랑 업계 전문 AI 분석 인터페이스
 interface CustomerSegment {
   segment: string;
@@ -35,7 +49,7 @@ interface RestaurantInsights {
 }
 
 // NPS 계산 (추천 의사 기반)
-function calculateNPS(responses: Array<Record<string, unknown>>): number {
+function calculateNPS(responses: ResponseRecord[]): number {
   const recommendationResponses = responses.filter(
     (r) => r.required_question_category === "recommendation" && r.rating
   );
@@ -55,7 +69,7 @@ function calculateNPS(responses: Array<Record<string, unknown>>): number {
 }
 
 // CSAT 계산 (전반적 만족도 기반)
-function calculateCSAT(responses: Array<Record<string, unknown>>): number {
+function calculateCSAT(responses: ResponseRecord[]): number {
   const satisfactionResponses = responses.filter(
     (r) => r.required_question_category === "overall_satisfaction" && r.rating
   );
@@ -69,7 +83,7 @@ function calculateCSAT(responses: Array<Record<string, unknown>>): number {
 }
 
 // 고객 충성도 지수 계산
-function calculateLoyaltyIndex(responses: Array<Record<string, unknown>>): number {
+function calculateLoyaltyIndex(responses: ResponseRecord[]): number {
   const revisitResponses = responses.filter(
     (r) => r.required_question_category === "revisit_intention" && r.rating
   );
@@ -91,7 +105,7 @@ function calculateLoyaltyIndex(responses: Array<Record<string, unknown>>): numbe
 }
 
 // 방문빈도별 고객 세분화
-function analyzeVisitFrequency(responses: Array<Record<string, unknown>>) {
+function analyzeVisitFrequency(responses: ResponseRecord[]) {
   const visitFreqResponses = responses.filter(
     (r) =>
       r.required_question_category === "visit_frequency" && r.selected_option
@@ -129,10 +143,10 @@ function analyzeVisitFrequency(responses: Array<Record<string, unknown>>) {
 
 // 고객 세그먼트별 분석
 function analyzeCustomerSegments(
-  responses: Array<Record<string, unknown>>,
-  customers: Array<Record<string, unknown>>
+  responses: ResponseRecord[],
+  customers: CustomerRecord[]
 ): CustomerSegment[] {
-  const segments: { [key: string]: Array<Record<string, unknown>> } = {};
+  const segments: { [key: string]: ResponseRecord[] } = {};
 
   customers.forEach((customer) => {
     const customerResponses = responses.filter(
@@ -207,7 +221,7 @@ function analyzeCustomerSegments(
 }
 
 // 트렌드 분석
-function analyzeTrends(responses: Array<Record<string, unknown>>): {
+function analyzeTrends(responses: ResponseRecord[]): {
   satisfactionTrend: string;
   growthPotential: string;
 } {
@@ -263,11 +277,11 @@ function generateDataBasedSummary(
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: Record<string, unknown>,
-  trends: Record<string, unknown>,
+  visitAnalysis: Record<string, number>,
+  trends: { satisfactionTrend: string; growthPotential: string },
   totalCustomers: number,
   totalResponses: number,
-  responses: Array<Record<string, unknown>>
+  responses: ResponseRecord[]
 ): string {
   // 실제 응답 데이터의 날짜 범위 계산
   const responseDates = responses.map((r) => new Date(r.created_at)).sort();
@@ -323,13 +337,13 @@ ${
 // 전문적인 인사이트 및 액션 아이템 생성
 
 function generateProfessionalInsights(
-  responses: Array<Record<string, unknown>>,
-  customers: Array<Record<string, unknown>>,
+  responses: ResponseRecord[],
+  customers: CustomerRecord[],
   nps: number,
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: Record<string, unknown>
+  visitAnalysis: Record<string, number>
 ) {
   const criticalIssues: string[] = [];
   const improvementPriorities: string[] = [];
@@ -660,9 +674,10 @@ export async function GET(
         },
       },
     });
-  } catch (error: unknown) {
+  } catch (err: unknown) {
+    const error = err as Error;
     console.error("=== AI 통계 분석 오류 ===", error);
-    const message = error instanceof Error ? error.message : "AI 분석 중 오류가 발생했습니다.";
+    const message = error.message || "AI 분석 중 오류가 발생했습니다.";
     return NextResponse.json(
       { error: message },
       { status: 500 }

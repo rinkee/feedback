@@ -2,6 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { GoogleGenAI } from "@google/genai";
 
+interface AIResponse {
+  customer_info_id: string;
+  customer_info?: {
+    age_group?: string;
+    gender?: string;
+  };
+  questions: { question_text: string; question_type: string };
+  response_text?: string | null;
+  selected_option?: string | null;
+  selected_options?: string[] | null;
+  rating?: number | null;
+  created_at: string;
+  answers?: ResponseAnswer[];
+}
+
+interface ResponseAnswer {
+  question?: { question_text: string };
+  response_text?: string | null;
+  selected_option?: string | null;
+  selected_options?: string[] | null;
+  rating?: number | null;
+}
+
+interface StoreInfo {
+  store_name?: string;
+  store_type_broad?: string;
+  location?: string;
+  target_audience?: string;
+  price_range?: string;
+  menu?: Array<{ name: string; price?: number }>;
+  features?: string[];
+  description?: string;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -213,9 +247,10 @@ export async function POST(
       totalResponses: customerResponses.size,
       surveyData: surveyData,
     });
-  } catch (error: unknown) {
+  } catch (err: unknown) {
+    const error = err as Error;
     console.error("=== AI 분석 오류 ===", error);
-    const message = error instanceof Error ? error.message : "AI 분석 중 오류가 발생했습니다.";
+    const message = error.message || "AI 분석 중 오류가 발생했습니다.";
     return NextResponse.json(
       { error: message },
       { status: 500 }
@@ -225,10 +260,10 @@ export async function POST(
 
 async function generateAIAnalysis(
   data: {
-    survey: unknown;
-    questions: unknown;
-    responses: Array<Record<string, unknown>>;
-    storeInfo: unknown;
+    survey: Record<string, unknown>;
+    questions: Array<{ question_text: string; question_type: string }>;
+    responses: AIResponse[];
+    storeInfo?: StoreInfo;
   }
 ) {
   console.log("AI 분석 함수 시작...");
@@ -244,14 +279,14 @@ async function generateAIAnalysis(
 
   console.log("통계 계산 중...");
 
-  responses.forEach((response: Record<string, unknown>) => {
-    if (response.customerInfo) {
-      const { age_group, gender } = response.customerInfo;
+  responses.forEach((response: AIResponse) => {
+    if (response.customer_info) {
+      const { age_group, gender } = response.customer_info;
       if (age_group) ageGroups[age_group] = (ageGroups[age_group] || 0) + 1;
       if (gender) genders[gender] = (genders[gender] || 0) + 1;
     }
 
-    response.answers.forEach((answer: Record<string, unknown>) => {
+    response.answers?.forEach((answer: ResponseAnswer) => {
       if (answer.rating !== null && answer.rating !== undefined) {
         ratings.push(answer.rating);
       }
@@ -333,7 +368,17 @@ async function generateAIAnalysis(
   };
 }
 
-async function performGeminiAnalysis(data: Record<string, unknown>) {
+async function performGeminiAnalysis(data: {
+  survey: Record<string, unknown>;
+  questions: Array<{ question_text: string; question_type: string }>;
+  responses: AIResponse[];
+  keyStats: Record<string, unknown>;
+  ageGroups: Record<string, number>;
+  genders: Record<string, number>;
+  ratings: number[];
+  textResponses: string[];
+  storeInfo?: StoreInfo;
+}) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("Gemini API 키가 설정되지 않았습니다.");
   }
@@ -405,13 +450,13 @@ ${textResponses
 ### 고객 응답 상세 (처음 10명):
 ${responses
   .slice(0, 10)
-  .map((res: Record<string, unknown>, i: number) => {
-    return `응답자 ${i + 1} (${res.customerInfo?.age_group} ${
-      res.customerInfo?.gender
+  .map((res: AIResponse, i: number) => {
+    return `응답자 ${i + 1} (${res.customer_info?.age_group} ${
+      res.customer_info?.gender
     }):
 ${res.answers
-  .map(
-    (ans: Record<string, unknown>) =>
+  ?.map(
+    (ans: ResponseAnswer) =>
       `- ${ans.question?.question_text}: ${
         ans.response_text || ans.rating || ans.selected_option || "응답없음"
       }`

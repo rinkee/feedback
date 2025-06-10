@@ -15,11 +15,21 @@ import {
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
+interface QuestionOptions {
+  required?: boolean;
+  maxRating?: number;
+  rating_min_label?: string;
+  rating_max_label?: string;
+  choices_text?: string[];
+  choice_ids?: string[];
+  isMultiSelect?: boolean;
+}
+
 interface RequiredQuestion {
   id: string;
   question_text: string;
   question_type: string;
-  options: Record<string, unknown>;
+  options: QuestionOptions;
   category: string;
   description: string;
   is_active: boolean;
@@ -41,9 +51,6 @@ export default function RequiredQuestionsPage() {
   const [saving, setSaving] = useState(false);
   const [userRequiredQuestions, setUserRequiredQuestions] = useState<
     UserRequiredQuestion[]
-  >([]);
-  const [availableQuestions, setAvailableQuestions] = useState<
-    RequiredQuestion[]
   >([]);
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -240,7 +247,6 @@ export default function RequiredQuestionsPage() {
           return;
         }
 
-        setAvailableQuestions(allQuestions || []);
 
         // 사용자의 필수 질문 설정 조회
         const { data: userQuestions, error: userQuestionsError } = await supabase
@@ -341,7 +347,7 @@ export default function RequiredQuestionsPage() {
 
     setSaving(true);
     try {
-      let updatedOptions: Record<string, unknown> = {};
+      let updatedOptions: QuestionOptions = {};
 
       // 질문 유형에 따라 옵션 설정
       if (editForm.question_type === "rating") {
@@ -383,20 +389,6 @@ export default function RequiredQuestionsPage() {
         alert("질문 수정 중 오류가 발생했습니다.");
       } else {
         // 로컬 상태 업데이트
-        setAvailableQuestions((prev) =>
-          prev.map((q) =>
-            q.id === editingQuestion
-              ? {
-                  ...q,
-                  question_text: editForm.question_text,
-                  question_type: editForm.question_type,
-                  description: editForm.description,
-                  options: updatedOptions,
-                }
-              : q
-          )
-        );
-
         setUserRequiredQuestions((prev) =>
           prev.map((uq) =>
             uq.required_questions.id === editingQuestion
