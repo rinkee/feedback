@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
 import { useState, FormEvent } from 'react';
@@ -48,9 +47,10 @@ export default function Auth() {
         setMessage('Action completed. Please check your email if signing up.');
       }
 
-    } catch (err: any) {
-      console.error('Authentication error:', err);
-      setError(err.message || 'An unexpected error occurred.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Authentication error:', error);
+      setError(error.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }

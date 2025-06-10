@@ -20,7 +20,7 @@ interface Question {
   survey_id?: string;
   question_text: string;
   question_type: "text" | "rating" | "boolean" | "multiple_choice";
-  options?: Record<string, any>;
+  options?: Record<string, unknown>;
   choices_text: string[];
   isMultiSelect?: boolean;
   order_num?: number;
@@ -97,8 +97,8 @@ export default function EditSurveyPage() {
 
         if (error) throw error;
 
-        const questionsFromResponse = data.map((q: any) => {
-          let parsedOptions: Record<string, any> = {};
+        const questionsFromResponse = data.map((q: Record<string, unknown>) => {
+          let parsedOptions: Record<string, unknown> = {};
           let choicesText: string[] = [];
           let isMultiSelect = false;
 
@@ -117,7 +117,7 @@ export default function EditSurveyPage() {
                 isMultiSelect = !!parsedOptions.isMultiSelect;
               }
             }
-          } catch (error) {
+          } catch (error: unknown) {
             console.error("Error parsing options:", error);
           }
 
@@ -130,9 +130,10 @@ export default function EditSurveyPage() {
 
         setQuestions(questionsFromResponse);
         setInitialQuestions(JSON.parse(JSON.stringify(questionsFromResponse)));
-      } catch (error: any) {
-        console.error("Error fetching questions:", error);
-        setError("질문 정보를 불러오는 데 실패했습니다: " + error.message);
+      } catch (error: unknown) {
+        const err = error as Error;
+        console.error("Error fetching questions:", err);
+        setError("질문 정보를 불러오는 데 실패했습니다: " + err.message);
       } finally {
         setLoadingQuestions(false);
       }
@@ -159,7 +160,11 @@ export default function EditSurveyPage() {
     setQuestions([...questions, newQuestion]);
   };
 
-  const updateQuestion = (index: number, field: keyof Question, value: any) => {
+  const updateQuestion = (
+    index: number,
+    field: keyof Question,
+    value: unknown
+  ) => {
     const updatedQuestions = [...questions];
     updatedQuestions[index] = { ...updatedQuestions[index], [field]: value };
 
@@ -362,7 +367,7 @@ export default function EditSurveyPage() {
         // 2.3 기존 질문 업데이트
         for (const q of existingQuestions) {
           // 데이터베이스 저장용 options 객체 생성
-          let dbOptions: Record<string, any> = {};
+          let dbOptions: Record<string, unknown> = {};
 
           if (
             q.question_type === "multiple_choice" ||
@@ -399,7 +404,7 @@ export default function EditSurveyPage() {
         if (newQuestions.length > 0) {
           const questionsToInsert = newQuestions.map((q) => {
             // 데이터베이스 저장용 options 객체 생성
-            let dbOptions: Record<string, any> = {};
+            let dbOptions: Record<string, unknown> = {};
 
             if (
               q.question_type === "multiple_choice" ||
@@ -441,9 +446,10 @@ export default function EditSurveyPage() {
       setSuccessMessage("설문이 성공적으로 업데이트되었습니다.");
       setInitialSurvey(JSON.parse(JSON.stringify(survey)));
       setInitialQuestions(JSON.parse(JSON.stringify(questions)));
-    } catch (error: any) {
-      console.error("Error updating survey:", error);
-      setError("설문 업데이트에 실패했습니다: " + error.message);
+    } catch (error: unknown) {
+      const err = error as Error;
+      console.error("Error updating survey:", err);
+      setError("설문 업데이트에 실패했습니다: " + err.message);
     } finally {
       setSaving(false);
     }

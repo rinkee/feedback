@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { type User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
@@ -11,7 +12,7 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -26,7 +27,7 @@ export default function DashboardLayout({
         }
 
         setUser(session.user);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Auth check error:", error);
         router.push("/auth");
       } finally {
