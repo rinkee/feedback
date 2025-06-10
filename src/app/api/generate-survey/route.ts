@@ -2,6 +2,36 @@ import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+interface MenuItem {
+  name: string;
+  price?: number;
+}
+
+interface StoreData {
+  menu?: MenuItem[];
+  features?: string[];
+  store_name?: string;
+  store_type_broad?: string;
+  location?: string;
+  target_audience?: string;
+  price_range?: string;
+  description?: string;
+}
+
+interface SurveyQuestion {
+  question_text: string;
+  question_type: "text" | "rating" | "single_choice" | "multiple_choice";
+  choices_text?: string[];
+  rating_min_label?: string;
+  rating_max_label?: string;
+}
+
+interface GeneratedSurvey {
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { description } = await request.json();
@@ -71,6 +101,8 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user.id)
       .single();
 
+    storeData = storeData as StoreData | null;
+
     // RLS 문제로 조회 실패시 서비스 키로 재시도
     if (storeError && storeError.code === "PGRST116") {
       console.log("=== RLS 문제로 서비스 키로 재시도 ===");
@@ -97,9 +129,7 @@ export async function POST(request: NextRequest) {
     if (storeData && !storeError) {
       const menuItems =
         storeData.menu
-          ?.map(
-            (item: any) => `${item.name} (${item.price?.toLocaleString()}원)`
-          )
+          ?.map((item) => `${item.name} (${item.price?.toLocaleString()}원)`)
           .join(", ") || "메뉴 정보 없음";
 
       const features = storeData.features?.join(", ") || "특징 정보 없음";
@@ -318,12 +348,13 @@ ${storeContext}
             console.log(`Success with ${model} on attempt ${attempt}`);
             break;
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
           console.error(
             `Error with ${model} attempt ${attempt}:`,
-            error.message
+            message
           );
-          lastError = error;
+          lastError = error as Error;
 
           // 503 또는 429 에러인 경우 잠시 대기 후 재시도
           if (
@@ -365,7 +396,7 @@ ${storeContext}
 
     try {
       // JSON 파싱
-      const survey = JSON.parse(fullText);
+      const survey = JSON.parse(fullText) as GeneratedSurvey;
 
       // 기본 유효성 검사
       if (
@@ -377,7 +408,7 @@ ${storeContext}
       }
 
       // 질문 유효성 검사 및 정리
-      survey.questions = survey.questions.map((q: any) => {
+      survey.questions = survey.questions.map((q: SurveyQuestion) => {
         if (!q.question_text || !q.question_type) {
           throw new Error("질문 형식이 올바르지 않습니다");
         }
@@ -428,10 +459,11 @@ ${storeContext}
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("설문 생성 오류:", error);
 
-    if (error.message?.includes("API key")) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("API key")) {
       return NextResponse.json(
         { error: "AI 서비스 연결에 실패했습니다. API 키를 확인해주세요." },
         { status: 500 }

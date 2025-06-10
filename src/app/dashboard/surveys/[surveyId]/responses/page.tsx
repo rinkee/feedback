@@ -17,12 +17,10 @@ import {
   AlertTriangle,
   Loader2,
   Copy,
-  MessageSquare,
   Bot,
   Sparkles,
   TrendingUp,
   History,
-  ChevronDown,
   ChevronRight,
   ChevronLeft,
   ThumbsUp,
@@ -111,15 +109,6 @@ export default function SurveyResponsesPage() {
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAnalysisHistory, setShowAnalysisHistory] = useState(false);
-  const [expandedRecommendations, setExpandedRecommendations] = useState(false);
-
-  // 통계 데이터
-  const [stats, setStats] = useState({
-    totalResponses: 0,
-    ageGroups: {} as Record<string, number>,
-    genders: {} as Record<string, number>,
-    averageRatings: {} as Record<string, number>,
-  });
 
   useEffect(() => {
     fetchSurveyData();
@@ -323,12 +312,7 @@ export default function SurveyResponsesPage() {
       }
     });
 
-    setStats({
-      totalResponses,
-      ageGroups,
-      genders,
-      averageRatings,
-    });
+    // 통계 상태 업데이트는 생략
   };
 
   const formatResponse = (response: Response, question: Question) => {

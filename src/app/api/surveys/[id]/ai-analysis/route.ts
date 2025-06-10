@@ -179,7 +179,7 @@ export async function POST(
 
     // AI 분석 결과를 데이터베이스에 저장
     console.log("19. 분석 결과 저장...");
-    const { data: savedAnalysis, error: saveError } = await supabase
+    const { error: saveError } = await supabase
       .from("ai_statistics")
       .insert({
         survey_id: surveyId,
@@ -213,16 +213,24 @@ export async function POST(
       totalResponses: customerResponses.size,
       surveyData: surveyData,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== AI 분석 오류 ===", error);
+    const message = error instanceof Error ? error.message : "AI 분석 중 오류가 발생했습니다.";
     return NextResponse.json(
-      { error: error.message || "AI 분석 중 오류가 발생했습니다." },
+      { error: message },
       { status: 500 }
     );
   }
 }
 
-async function generateAIAnalysis(data: any) {
+async function generateAIAnalysis(
+  data: {
+    survey: unknown;
+    questions: unknown;
+    responses: Array<Record<string, unknown>>;
+    storeInfo: unknown;
+  }
+) {
   console.log("AI 분석 함수 시작...");
 
   const { survey, questions, responses, storeInfo } = data;
@@ -236,14 +244,14 @@ async function generateAIAnalysis(data: any) {
 
   console.log("통계 계산 중...");
 
-  responses.forEach((response: any) => {
+  responses.forEach((response: Record<string, unknown>) => {
     if (response.customerInfo) {
       const { age_group, gender } = response.customerInfo;
       if (age_group) ageGroups[age_group] = (ageGroups[age_group] || 0) + 1;
       if (gender) genders[gender] = (genders[gender] || 0) + 1;
     }
 
-    response.answers.forEach((answer: any) => {
+    response.answers.forEach((answer: Record<string, unknown>) => {
       if (answer.rating !== null && answer.rating !== undefined) {
         ratings.push(answer.rating);
       }
@@ -325,7 +333,7 @@ async function generateAIAnalysis(data: any) {
   };
 }
 
-async function performGeminiAnalysis(data: any) {
+async function performGeminiAnalysis(data: Record<string, unknown>) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("Gemini API 키가 설정되지 않았습니다.");
   }
@@ -361,7 +369,8 @@ ${
 - 주요 메뉴: ${
         storeInfo.menu
           ?.map(
-            (item: any) => `${item.name} (${item.price?.toLocaleString()}원)`
+            (item: { name: string; price?: number }) =>
+              `${item.name} (${item.price?.toLocaleString()}원)`
           )
           .join(", ") || "정보 없음"
       }
@@ -376,9 +385,8 @@ ${
 
 ### 설문 질문들:
 ${questions
-  .map(
-    (q: any, i: number) =>
-      `${i + 1}. ${q.question_text} (유형: ${q.question_type})`
+  .map((q: { question_text: string; question_type: string }, i: number) =>
+    `${i + 1}. ${q.question_text} (유형: ${q.question_type})`
   )
   .join("\n")}
 
@@ -397,13 +405,13 @@ ${textResponses
 ### 고객 응답 상세 (처음 10명):
 ${responses
   .slice(0, 10)
-  .map((res: any, i: number) => {
+  .map((res: Record<string, unknown>, i: number) => {
     return `응답자 ${i + 1} (${res.customerInfo?.age_group} ${
       res.customerInfo?.gender
     }):
 ${res.answers
   .map(
-    (ans: any) =>
+    (ans: Record<string, unknown>) =>
       `- ${ans.question?.question_text}: ${
         ans.response_text || ans.rating || ans.selected_option || "응답없음"
       }`

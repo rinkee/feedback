@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   BarChart,
   ThumbsUp,
-  Eye,
   AlertTriangle,
   TrendingUp,
   Users,
@@ -12,8 +11,6 @@ import {
   Star,
   Bot,
   Sparkles,
-  User,
-  X,
 } from "lucide-react";
 import {
   LineChart,
@@ -30,7 +27,6 @@ import {
   Cell,
 } from "recharts";
 import { supabase } from "@/lib/supabaseClient";
-import { User as AuthUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import { useState, useEffect } from "react";
@@ -128,7 +124,6 @@ interface CategoryStats {
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [dashboardStats, setDashboardStats] = useState({
     totalCustomers: 0,
@@ -137,11 +132,7 @@ export default function DashboardPage() {
     unreadCount: 0,
     avgRating: 0,
   });
-  const [recentResponses, setRecentResponses] = useState<RecentResponse[]>([]);
   const [latestAIStats, setLatestAIStats] = useState<AIStatistic | null>(null);
-  const [selectedResponseData, setSelectedResponseData] =
-    useState<ResponseModalData | null>(null);
-  const [showResponseModal, setShowResponseModal] = useState(false);
 
   // 필수 질문 상태 추가
   const [requiredQuestions, setRequiredQuestions] = useState<
@@ -235,13 +226,12 @@ export default function DashboardPage() {
 
       // 활성화된 질문들만 필터링
       const enabledQuestions = questions.filter((q) => q.is_active);
-      const enabledCategories = enabledQuestions.map((q) => q.category);
 
       // 모든 필요한 데이터를 5개의 쿼리로 가져오기
       const [
         { data: allResponses, error: responsesError },
         { data: allCustomers, error: customersError },
-        { data: aiStatsData, error: aiError },
+        { data: aiStatsData },
         { data: questionsData, error: questionsError },
         { data: requiredQuestionsData, error: requiredQuestionsError },
       ] = await Promise.all([
@@ -692,14 +682,7 @@ export default function DashboardPage() {
       }
     });
 
-    const recentResponsesData = Array.from(customerResponseMap.values())
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      .slice(0, 5);
-
-    setRecentResponses(recentResponsesData);
+    // 최근 응답 목록은 현재 사용하지 않음
   };
 
   // 날짜 계산 헬퍼 함수
@@ -734,7 +717,6 @@ export default function DashboardPage() {
         setLoading(false);
         return;
       }
-      setUser(session.user);
 
       try {
         // 필수 질문 상태 가져오기
@@ -799,10 +781,7 @@ export default function DashboardPage() {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (event === "SIGNED_OUT" || !newSession) {
-          setUser(null);
           router.push("/login");
-        } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-          setUser(newSession?.user ?? null);
         }
       }
     );

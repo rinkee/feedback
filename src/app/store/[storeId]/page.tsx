@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowRight, ArrowLeft, CheckCircle, AlertCircle, User, Cake, VenetianMask, Send, MessageSquare, Star, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, CheckCircle, AlertCircle, User, Cake, VenetianMask, Send, Star, Check } from 'lucide-react';
 
 interface SurveyQuestion {
   id: string;
@@ -74,7 +74,7 @@ export default function StoreSurveyPage({ params }: Props) {
     setError(null); // Clear any previous errors
   };
 
-  const handleAnswerChange = (questionId: string, value: string | number, questionType?: 'select', isMulti?: boolean, optionIndex?: number) => {
+  const handleAnswerChange = (questionId: string, value: string | number, questionType?: 'select', isMulti?: boolean) => {
     setError(null); // Clear error on new answer
 
     if (questionType === 'select') {

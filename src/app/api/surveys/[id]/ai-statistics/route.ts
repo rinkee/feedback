@@ -35,7 +35,7 @@ interface RestaurantInsights {
 }
 
 // NPS 계산 (추천 의사 기반)
-function calculateNPS(responses: any[]): number {
+function calculateNPS(responses: Array<Record<string, unknown>>): number {
   const recommendationResponses = responses.filter(
     (r) => r.required_question_category === "recommendation" && r.rating
   );
@@ -57,7 +57,7 @@ function calculateNPS(responses: any[]): number {
 }
 
 // CSAT 계산 (전반적 만족도 기반)
-function calculateCSAT(responses: any[]): number {
+function calculateCSAT(responses: Array<Record<string, unknown>>): number {
   const satisfactionResponses = responses.filter(
     (r) => r.required_question_category === "overall_satisfaction" && r.rating
   );
@@ -71,7 +71,7 @@ function calculateCSAT(responses: any[]): number {
 }
 
 // 고객 충성도 지수 계산
-function calculateLoyaltyIndex(responses: any[]): number {
+function calculateLoyaltyIndex(responses: Array<Record<string, unknown>>): number {
   const revisitResponses = responses.filter(
     (r) => r.required_question_category === "revisit_intention" && r.rating
   );
@@ -93,7 +93,7 @@ function calculateLoyaltyIndex(responses: any[]): number {
 }
 
 // 방문빈도별 고객 세분화
-function analyzeVisitFrequency(responses: any[]) {
+function analyzeVisitFrequency(responses: Array<Record<string, unknown>>) {
   const visitFreqResponses = responses.filter(
     (r) =>
       r.required_question_category === "visit_frequency" && r.selected_option
@@ -131,10 +131,10 @@ function analyzeVisitFrequency(responses: any[]) {
 
 // 고객 세그먼트별 분석
 function analyzeCustomerSegments(
-  responses: any[],
-  customers: any[]
+  responses: Array<Record<string, unknown>>,
+  customers: Array<Record<string, unknown>>
 ): CustomerSegment[] {
-  const segments: { [key: string]: any[] } = {};
+  const segments: { [key: string]: Array<Record<string, unknown>> } = {};
 
   customers.forEach((customer) => {
     const customerResponses = responses.filter(
@@ -209,7 +209,7 @@ function analyzeCustomerSegments(
 }
 
 // 트렌드 분석
-function analyzeTrends(responses: any[]): {
+function analyzeTrends(responses: Array<Record<string, unknown>>): {
   satisfactionTrend: string;
   growthPotential: string;
 } {
@@ -265,11 +265,11 @@ function generateDataBasedSummary(
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: any,
-  trends: any,
+  visitAnalysis: Record<string, unknown>,
+  trends: Record<string, unknown>,
   totalCustomers: number,
   totalResponses: number,
-  responses: any[]
+  responses: Array<Record<string, unknown>>
 ): string {
   // 실제 응답 데이터의 날짜 범위 계산
   const responseDates = responses.map((r) => new Date(r.created_at)).sort();
@@ -323,7 +323,9 @@ ${
 }
 
 // 전문적인 인사이트 및 액션 아이템 생성
-function generateDetailedRecommendations(insights: any): string {
+function generateDetailedRecommendations(
+  insights: Record<string, unknown>
+): string {
   const sections = [];
 
   // 긴급 개선사항
@@ -378,13 +380,13 @@ ${insights.opportunityAreas
 }
 
 function generateProfessionalInsights(
-  responses: any[],
-  customers: any[],
+  responses: Array<Record<string, unknown>>,
+  customers: Array<Record<string, unknown>>,
   nps: number,
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: any
+  visitAnalysis: Record<string, unknown>
 ) {
   const criticalIssues: string[] = [];
   const improvementPriorities: string[] = [];
@@ -715,10 +717,11 @@ export async function GET(
         },
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== AI 통계 분석 오류 ===", error);
+    const message = error instanceof Error ? error.message : "AI 분석 중 오류가 발생했습니다.";
     return NextResponse.json(
-      { error: "AI 분석 중 오류가 발생했습니다." },
+      { error: message },
       { status: 500 }
     );
   }
