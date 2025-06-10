@@ -147,9 +147,10 @@ export default function StoreSurveyPage({ params }: Props) {
       }
       setMessage('설문이 성공적으로 제출되었습니다! 참여해주셔서 감사합니다.');
       setCurrentOverallStep(3); // Show thank you page
-    } catch (err: any) {
-      console.error('Submission error:', err);
-      setError(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Submission error:', error);
+      setError(error.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }

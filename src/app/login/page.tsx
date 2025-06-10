@@ -58,8 +58,9 @@ export default function LoginPage() {
         // 세션이 없지만 오류도 없는 경우는 드물지만, 대비합니다.
         setError("로그인에 실패했습니다. 세션 정보를 가져올 수 없습니다.");
       }
-    } catch (err: any) {
-      setError(err.message || "알 수 없는 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "알 수 없는 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }

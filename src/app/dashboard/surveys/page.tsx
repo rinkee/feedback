@@ -86,8 +86,9 @@ export default function SurveysPage() {
 
       console.log("Found surveys:", surveysData);
       setSurveys(surveysData || []);
-    } catch (err: any) {
-      console.error("Unexpected error:", err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Unexpected error:", error);
       setError("예상치 못한 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -136,9 +137,10 @@ export default function SurveysPage() {
           ? "설문이 비활성화되었습니다."
           : "설문이 활성화되었습니다."
       );
-    } catch (err: any) {
-      console.error("Toggle error:", err);
-      alert(err.message || "설문 상태 변경 중 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Toggle error:", error);
+      alert(error.message || "설문 상태 변경 중 오류가 발생했습니다.");
     } finally {
       setToggleLoading(null);
     }
@@ -212,9 +214,10 @@ export default function SurveysPage() {
       // Refresh the list
       setSurveys((prev) => prev.filter((survey) => survey.id !== surveyId));
       alert("설문이 성공적으로 삭제되었습니다.");
-    } catch (err: any) {
-      console.error("Delete error:", err);
-      alert(err.message || "설문 삭제 중 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Delete error:", error);
+      alert(error.message || "설문 삭제 중 오류가 발생했습니다.");
     } finally {
       setDeleteLoading(null);
     }
