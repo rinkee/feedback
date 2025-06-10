@@ -52,9 +52,6 @@ export default function RequiredQuestionsPage() {
   const [userRequiredQuestions, setUserRequiredQuestions] = useState<
     UserRequiredQuestion[]
   >([]);
-  const [availableQuestions, setAvailableQuestions] = useState<
-    RequiredQuestion[]
-  >([]);
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     question_text: "",
@@ -250,7 +247,6 @@ export default function RequiredQuestionsPage() {
           return;
         }
 
-        setAvailableQuestions(allQuestions || []);
 
         // 사용자의 필수 질문 설정 조회
         const { data: userQuestions, error: userQuestionsError } = await supabase
@@ -393,20 +389,6 @@ export default function RequiredQuestionsPage() {
         alert("질문 수정 중 오류가 발생했습니다.");
       } else {
         // 로컬 상태 업데이트
-        setAvailableQuestions((prev) =>
-          prev.map((q) =>
-            q.id === editingQuestion
-              ? {
-                  ...q,
-                  question_text: editForm.question_text,
-                  question_type: editForm.question_type,
-                  description: editForm.description,
-                  options: updatedOptions,
-                }
-              : q
-          )
-        );
-
         setUserRequiredQuestions((prev) =>
           prev.map((uq) =>
             uq.required_questions.id === editingQuestion

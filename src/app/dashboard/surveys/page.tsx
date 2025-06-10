@@ -92,7 +92,7 @@ export default function SurveysPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   const toggleSurveyActive = async (
     surveyId: string,

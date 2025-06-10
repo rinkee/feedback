@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-empty-interface, no-var */
+
 declare namespace JSX {
   interface IntrinsicElements {
     [elemName: string]: unknown;

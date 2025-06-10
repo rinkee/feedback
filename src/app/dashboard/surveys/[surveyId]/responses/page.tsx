@@ -207,7 +207,7 @@ export default function SurveyResponsesPage() {
     } finally {
       setLoading(false);
     }
-  }, [surveyId]);
+  }, [surveyId, router]);
 
   const fetchAIStatistics = useCallback(async () => {
     try {
@@ -223,7 +223,7 @@ export default function SurveyResponsesPage() {
     } catch (error: unknown) {
       console.error("AI 통계 조회 오류:", error);
     }
-  }, [surveyId]);
+  }, [surveyId, router]);
 
   const generateAIAnalysis = async () => {
     if (responsesData.length === 0) {
