@@ -37,12 +37,13 @@ interface StoreInfo {
 }
 
 export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  request: Request, // 1. NextRequest를 표준 Request로 변경
+  { params }: { params: { id: string } } // 2. params에서 Promise 제거
+): Promise<Response> {
+  // 3. 함수의 반환 타입을 명시
   try {
     console.log("=== AI Analysis API 시작 ===");
-    const { id: surveyId } = await params;
+    const surveyId = params.id;
     console.log("1. Survey ID:", surveyId);
 
     // 임시로 인증 체크 우회하고 기존 사용자 ID 사용 (테스트용)
@@ -61,7 +62,7 @@ export async function POST(
       return NextResponse.json(
         { error: `설문 조회 오류: ${surveyError.message}` },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     if (!surveyDataArray || surveyDataArray.length === 0) {
@@ -69,7 +70,7 @@ export async function POST(
       return NextResponse.json(
         { error: "설문을 찾을 수 없습니다." },
         { status: 404 }
-      );
+      ) as Response;
     }
 
     const surveyData = surveyDataArray[0];
@@ -81,7 +82,7 @@ export async function POST(
       return NextResponse.json(
         { error: "설문에 대한 접근 권한이 없습니다." },
         { status: 403 }
-      );
+      ) as Response;
     }
 
     // 설문 질문들 조회
@@ -97,7 +98,7 @@ export async function POST(
       return NextResponse.json(
         { error: `질문 조회 오류: ${questionsError.message}` },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     console.log("10. 질문 수:", questions?.length || 0);
@@ -157,7 +158,7 @@ export async function POST(
       return NextResponse.json(
         { error: `응답 조회 오류: ${responsesError.message}` },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     console.log("13. 총 응답 수:", responses?.length || 0);
@@ -173,7 +174,7 @@ export async function POST(
           totalResponses: 0,
         },
         { status: 200 }
-      );
+      ) as Response;
     }
 
     // 고객별로 응답 그룹화
@@ -250,12 +251,12 @@ export async function POST(
       keyStats: analysis.keyStats,
       totalResponses: customerResponses.size,
       surveyData: surveyData,
-    });
+    }) as Response;
   } catch (err: unknown) {
     const error = err as Error;
     console.error("=== AI 분석 오류 ===", error);
     const message = error.message || "AI 분석 중 오류가 발생했습니다.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 }) as Response;
   }
 }
 
