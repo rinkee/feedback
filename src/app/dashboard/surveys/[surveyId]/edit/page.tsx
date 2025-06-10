@@ -2,14 +2,13 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter, useParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
   Save,
   AlertTriangle,
   PlusCircle,
-  CheckCircle,
   Eye,
   X,
 } from "lucide-react";
@@ -38,7 +37,6 @@ interface SurveyData {
 }
 
 export default function EditSurveyPage() {
-  const router = useRouter();
   const params = useParams();
   const surveyId = params.surveyId as string;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +8,6 @@ import EmptyState from "@/components/EmptyState";
 import {
   Plus,
   Edit3,
-  Edit,
   Eye,
   ExternalLink,
   BarChart3,
@@ -39,7 +38,7 @@ export default function SurveysPage() {
 
   useEffect(() => {
     fetchSurveys();
-
+    
     // 외부 클릭시 드롭다운 닫기
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -52,9 +51,9 @@ export default function SurveysPage() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [fetchSurveys]);
 
-  const fetchSurveys = async () => {
+  const fetchSurveys = useCallback(async () => {
     try {
       setLoading(true);
       const {
@@ -93,7 +92,7 @@ export default function SurveysPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const toggleSurveyActive = async (
     surveyId: string,

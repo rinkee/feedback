@@ -13,8 +13,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   BarChart as RechartsBarChart,
@@ -29,7 +27,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface Survey {
   id: string;
@@ -70,21 +68,6 @@ interface RecentResponse {
   };
 }
 
-interface ResponseModalData {
-  customer_info: {
-    name: string;
-    age_group: string;
-    gender: string;
-  };
-  responses: Array<{
-    question_text: string;
-    question_type: string;
-    response_text?: string;
-    rating?: number;
-    selected_option?: string;
-  }>;
-  created_at: string;
-}
 
 // 차트 데이터 인터페이스
 interface RevisitTrendData {
@@ -111,7 +94,7 @@ interface RequiredQuestion {
   question_text: string;
   question_type: "rating" | "single_choice" | "text";
   is_active: boolean;
-  options?: { [key: string]: any };
+  options?: Record<string, unknown>;
 }
 
 // 카테고리별 통계 인터페이스 추가
@@ -217,7 +200,7 @@ export default function DashboardPage() {
   };
 
   // 🚀 모든 데이터를 한 번에 가져오는 최적화된 함수
-  const fetchAllDashboardData = async (
+  const fetchAllDashboardData = useCallback(async (
     surveyId: string,
     questions: RequiredQuestion[]
   ) => {
@@ -348,15 +331,15 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("❌ Error in optimized data fetch:", error);
     }
-  };
+  }, []);
 
   // 🔄 모든 데이터 처리를 한 번에 수행하는 함수
   const processAllData = (
-    responses: any[],
-    customers: any[],
+    responses: Array<Record<string, unknown>>,
+    customers: Array<Record<string, unknown>>,
     enabledQuestions: RequiredQuestion[],
-    questionsData: any[],
-    requiredQuestionsData: any[]
+    questionsData: Array<Record<string, unknown>>,
+    requiredQuestionsData: Array<Record<string, unknown>>
   ) => {
     console.log("🔄 Processing all data...");
 
@@ -559,7 +542,7 @@ export default function DashboardPage() {
 
   // 차트 데이터 처리
   const processChartData = (
-    responses: any[],
+    responses: Array<Record<string, unknown>>,
     enabledQuestions: RequiredQuestion[]
   ) => {
     console.log("🚀 Starting processChartData with:", {
@@ -662,7 +645,7 @@ export default function DashboardPage() {
   };
 
   // 최근 응답 처리
-  const processRecentResponses = (responses: any[]) => {
+  const processRecentResponses = (responses: RecentResponse[]) => {
     const validResponses = responses.filter(
       (r) => (r.response_text || r.rating) && r.customer_info
     );
@@ -789,7 +772,7 @@ export default function DashboardPage() {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, fetchAllDashboardData]);
 
   // Compute latest non-zero revisit trend entry for caption
   const latestRevisitEntry =
@@ -1038,7 +1021,7 @@ export default function DashboardPage() {
                                 formatter={(
                                   value: number,
                                   name: string,
-                                  props: any
+                                  props: { payload: { count: number } }
                                 ) => [
                                   `${Math.round(value)}% (${
                                     props.payload.count
@@ -1181,7 +1164,7 @@ export default function DashboardPage() {
                                   formatter={(
                                     value: number,
                                     name: string,
-                                    props: any
+                                    props: { payload: { count: number } }
                                   ) => [
                                     `${Math.round(value)}% (${
                                       props.payload.count
@@ -1423,7 +1406,7 @@ export default function DashboardPage() {
                               formatter={(
                                 value: number,
                                 name: string,
-                                props: any
+                                props: { payload: { count: number; rating: number } }
                               ) => [
                                 `${props.payload.count}명 (${value}%)`,
                                 `${props.payload.rating}점`,

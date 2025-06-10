@@ -43,13 +43,11 @@ function calculateNPS(responses: Array<Record<string, unknown>>): number {
   if (recommendationResponses.length === 0) return 0;
 
   let promoters = 0,
-    passives = 0,
     detractors = 0;
 
   recommendationResponses.forEach((r) => {
     if (r.rating >= 4) promoters++;
-    else if (r.rating === 3) passives++;
-    else detractors++;
+    else if (r.rating !== 3) detractors++;
   });
 
   const total = recommendationResponses.length;
@@ -323,61 +321,6 @@ ${
 }
 
 // 전문적인 인사이트 및 액션 아이템 생성
-function generateDetailedRecommendations(
-  insights: Record<string, unknown>
-): string {
-  const sections = [];
-
-  // 긴급 개선사항
-  if (insights.criticalIssues.length > 0) {
-    sections.push(`🚨 긴급 조치 필요:
-${insights.criticalIssues
-  .map((issue: string, i: number) => `${i + 1}. ${issue}`)
-  .join("\n")}`);
-  }
-
-  // 우선순위 개선사항
-  if (insights.improvementPriorities.length > 0) {
-    sections.push(`📋 우선순위 개선사항:
-${insights.improvementPriorities
-  .map((priority: string, i: number) => `${i + 1}. ${priority}`)
-  .join("\n")}`);
-  }
-
-  // 단점 개선 방안
-  if (insights.weaknessImprovements.length > 0) {
-    sections.push(`🔧 단점 개선 방안:
-${insights.weaknessImprovements
-  .map((improvement: string, i: number) => `${i + 1}. ${improvement}`)
-  .join("\n")}`);
-  }
-
-  // 장점 활용 전략
-  if (insights.strengthLeverage.length > 0) {
-    sections.push(`💪 장점 활용 전략:
-${insights.strengthLeverage
-  .map((leverage: string, i: number) => `${i + 1}. ${leverage}`)
-  .join("\n")}`);
-  }
-
-  // 전략적 권장사항
-  if (insights.strategicRecommendations.length > 0) {
-    sections.push(`🎯 전략적 권장사항:
-${insights.strategicRecommendations
-  .map((rec: string, i: number) => `${i + 1}. ${rec}`)
-  .join("\n")}`);
-  }
-
-  // 기회 영역
-  if (insights.opportunityAreas.length > 0) {
-    sections.push(`🌟 성장 기회:
-${insights.opportunityAreas
-  .map((opp: string, i: number) => `${i + 1}. ${opp}`)
-  .join("\n")}`);
-  }
-
-  return sections.join("\n\n");
-}
 
 function generateProfessionalInsights(
   responses: Array<Record<string, unknown>>,

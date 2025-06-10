@@ -2,18 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { User as AuthUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
   CheckSquare,
   Square,
   Star,
   Edit,
-  Plus,
   Save,
   X,
   AlertCircle,
-  Trash2,
   Settings,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
@@ -22,7 +19,7 @@ interface RequiredQuestion {
   id: string;
   question_text: string;
   question_type: string;
-  options: any;
+  options: Record<string, unknown>;
   category: string;
   description: string;
   is_active: boolean;
@@ -42,7 +39,6 @@ interface UserRequiredQuestion {
 export default function RequiredQuestionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [userRequiredQuestions, setUserRequiredQuestions] = useState<
     UserRequiredQuestion[]
   >([]);
@@ -230,8 +226,6 @@ export default function RequiredQuestionsPage() {
         return;
       }
 
-      setUser(session.user);
-
       try {
         // 모든 필수 질문 조회 (활성화된 질문만)
         const { data: allQuestions, error: allError } = await supabase
@@ -249,10 +243,14 @@ export default function RequiredQuestionsPage() {
         setAvailableQuestions(allQuestions || []);
 
         // 사용자의 필수 질문 설정 조회
-        const { data: userQuestions, error: userError } = await supabase
+        const { data: userQuestions, error: userQuestionsError } = await supabase
           .from("user_required_questions")
           .select("*")
           .eq("user_id", session.user.id);
+
+        if (userQuestionsError) {
+          console.error("Error fetching user questions:", userQuestionsError);
+        }
 
         const existingQuestionIds = new Set(
           (userQuestions || []).map((uq) => uq.required_question_id)
@@ -343,8 +341,7 @@ export default function RequiredQuestionsPage() {
 
     setSaving(true);
     try {
-      const question = availableQuestions.find((q) => q.id === editingQuestion);
-      let updatedOptions: any = {};
+      let updatedOptions: Record<string, unknown> = {};
 
       // 질문 유형에 따라 옵션 설정
       if (editForm.question_type === "rating") {
