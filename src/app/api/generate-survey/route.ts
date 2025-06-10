@@ -32,10 +32,13 @@ interface GeneratedSurvey {
   questions: SurveyQuestion[];
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { description } = await request.json();
+    // FIX 1: request.json()의 반환 타입을 명시적으로 지정하고 올바른 구조 분해 할당을 사용합니다.
+    // 이렇게 하면 'description'이 string 타입임을 TypeScript가 알게 되어 오류가 해결됩니다.
+    const { description } = (await request.json()) as { description: string };
 
+    // FIX 3: 'description' 변수가 위에서 올바르게 선언되었으므로, 이제 여기서 정상적으로 사용할 수 있습니다.
     if (!description || typeof description !== "string") {
       return NextResponse.json(
         { error: "설문 설명이 필요합니다." },
@@ -127,9 +130,13 @@ export async function POST(request: NextRequest) {
 
     let storeContext = "";
     if (storeData && !storeError) {
+      // FIX 2: map 함수의 콜백 매개변수 'item'에 명시적으로 'MenuItem' 타입을 지정합니다.
       const menuItems =
         storeData.menu
-          ?.map((item) => `${item.name} (${item.price?.toLocaleString()}원)`)
+          ?.map(
+            (item: MenuItem) =>
+              `${item.name} (${item.price?.toLocaleString()}원)`
+          )
           .join(", ") || "메뉴 정보 없음";
 
       const features = storeData.features?.join(", ") || "특징 정보 없음";
@@ -171,6 +178,7 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.GEMINI_API_KEY,
     });
 
+    // ... (이하 코드는 동일)
     const config = {
       responseMimeType: "application/json" as const,
       systemInstruction: [
