@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
@@ -382,7 +381,7 @@ export default function HomePage() {
                       <span className="ml-2 text-xs text-gray-600">5/5</span>
                     </div>
                     <p className="text-xs text-gray-700">
-                      "커피가 정말 맛있어요! 매우 그렇다"
+                      커피가 정말 맛있어요! 매우 그렇다
                     </p>
                   </div>
                 </div>
@@ -421,7 +420,7 @@ export default function HomePage() {
                       <span className="ml-2 text-xs text-gray-600">4/5</span>
                     </div>
                     <p className="text-xs text-gray-700">
-                      "분위기 좋아요. 그렇다"
+                      분위기 좋아요. 그렇다
                     </p>
                   </div>
                 </div>
@@ -486,8 +485,8 @@ export default function HomePage() {
                   </span>
                 </div>
                 <p className="text-xs text-gray-700 leading-relaxed mb-3">
-                  "최근 1주일간 커피 맛 만족도가 15% 상승했습니다. 고객들은 특히
-                  신메뉴 '바닐라 라떼'에 높은 평가를 주고 있어요."
+                  최근 1주일간 커피 맛 만족도가 15% 상승했습니다. 고객들은 특히
+                  신메뉴 &#39;바닐라 라떼&#39;에 높은 평가를 주고 있어요.
                 </p>
 
                 <div className="space-y-2">

@@ -1,5 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
+
+interface ResponseRecord {
+  rating: number | 0;
+  required_question_category?: string | null;
+  selected_option?: string | null;
+  customer_info_id: string;
+  created_at: string;
+}
+
+interface CustomerRecord {
+  id: string;
+  age_group?: string | null;
+  gender?: string | null;
+}
 
 // 레스토랑 업계 전문 AI 분석 인터페이스
 interface CustomerSegment {
@@ -35,7 +49,7 @@ interface RestaurantInsights {
 }
 
 // NPS 계산 (추천 의사 기반)
-function calculateNPS(responses: any[]): number {
+function calculateNPS(responses: ResponseRecord[]): number {
   const recommendationResponses = responses.filter(
     (r) => r.required_question_category === "recommendation" && r.rating
   );
@@ -43,13 +57,11 @@ function calculateNPS(responses: any[]): number {
   if (recommendationResponses.length === 0) return 0;
 
   let promoters = 0,
-    passives = 0,
     detractors = 0;
 
   recommendationResponses.forEach((r) => {
     if (r.rating >= 4) promoters++;
-    else if (r.rating === 3) passives++;
-    else detractors++;
+    else if (r.rating !== 3) detractors++;
   });
 
   const total = recommendationResponses.length;
@@ -57,7 +69,7 @@ function calculateNPS(responses: any[]): number {
 }
 
 // CSAT 계산 (전반적 만족도 기반)
-function calculateCSAT(responses: any[]): number {
+function calculateCSAT(responses: ResponseRecord[]): number {
   const satisfactionResponses = responses.filter(
     (r) => r.required_question_category === "overall_satisfaction" && r.rating
   );
@@ -71,7 +83,7 @@ function calculateCSAT(responses: any[]): number {
 }
 
 // 고객 충성도 지수 계산
-function calculateLoyaltyIndex(responses: any[]): number {
+function calculateLoyaltyIndex(responses: ResponseRecord[]): number {
   const revisitResponses = responses.filter(
     (r) => r.required_question_category === "revisit_intention" && r.rating
   );
@@ -93,7 +105,7 @@ function calculateLoyaltyIndex(responses: any[]): number {
 }
 
 // 방문빈도별 고객 세분화
-function analyzeVisitFrequency(responses: any[]) {
+function analyzeVisitFrequency(responses: ResponseRecord[]) {
   const visitFreqResponses = responses.filter(
     (r) =>
       r.required_question_category === "visit_frequency" && r.selected_option
@@ -105,6 +117,10 @@ function analyzeVisitFrequency(responses: any[]) {
 
   visitFreqResponses.forEach((r) => {
     const choice = r.selected_option;
+    if (!choice) {
+      return;
+    }
+
     if (choice === "choice_1") newCustomers++; // 이번이 처음
     else if (["choice_2", "choice_3"].includes(choice))
       regularCustomers++; // 1년에 1-2번, 몇 달에 한 번
@@ -131,10 +147,10 @@ function analyzeVisitFrequency(responses: any[]) {
 
 // 고객 세그먼트별 분석
 function analyzeCustomerSegments(
-  responses: any[],
-  customers: any[]
+  responses: ResponseRecord[],
+  customers: CustomerRecord[]
 ): CustomerSegment[] {
-  const segments: { [key: string]: any[] } = {};
+  const segments: { [key: string]: ResponseRecord[] } = {};
 
   customers.forEach((customer) => {
     const customerResponses = responses.filter(
@@ -209,7 +225,7 @@ function analyzeCustomerSegments(
 }
 
 // 트렌드 분석
-function analyzeTrends(responses: any[]): {
+function analyzeTrends(responses: ResponseRecord[]): {
   satisfactionTrend: string;
   growthPotential: string;
 } {
@@ -265,11 +281,11 @@ function generateDataBasedSummary(
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: any,
-  trends: any,
+  visitAnalysis: Record<string, number>,
+  trends: { satisfactionTrend: string; growthPotential: string },
   totalCustomers: number,
   totalResponses: number,
-  responses: any[]
+  responses: ResponseRecord[]
 ): string {
   // 실제 응답 데이터의 날짜 범위 계산
   const responseDates = responses.map((r) => new Date(r.created_at)).sort();
@@ -323,68 +339,15 @@ ${
 }
 
 // 전문적인 인사이트 및 액션 아이템 생성
-function generateDetailedRecommendations(insights: any): string {
-  const sections = [];
-
-  // 긴급 개선사항
-  if (insights.criticalIssues.length > 0) {
-    sections.push(`🚨 긴급 조치 필요:
-${insights.criticalIssues
-  .map((issue: string, i: number) => `${i + 1}. ${issue}`)
-  .join("\n")}`);
-  }
-
-  // 우선순위 개선사항
-  if (insights.improvementPriorities.length > 0) {
-    sections.push(`📋 우선순위 개선사항:
-${insights.improvementPriorities
-  .map((priority: string, i: number) => `${i + 1}. ${priority}`)
-  .join("\n")}`);
-  }
-
-  // 단점 개선 방안
-  if (insights.weaknessImprovements.length > 0) {
-    sections.push(`🔧 단점 개선 방안:
-${insights.weaknessImprovements
-  .map((improvement: string, i: number) => `${i + 1}. ${improvement}`)
-  .join("\n")}`);
-  }
-
-  // 장점 활용 전략
-  if (insights.strengthLeverage.length > 0) {
-    sections.push(`💪 장점 활용 전략:
-${insights.strengthLeverage
-  .map((leverage: string, i: number) => `${i + 1}. ${leverage}`)
-  .join("\n")}`);
-  }
-
-  // 전략적 권장사항
-  if (insights.strategicRecommendations.length > 0) {
-    sections.push(`🎯 전략적 권장사항:
-${insights.strategicRecommendations
-  .map((rec: string, i: number) => `${i + 1}. ${rec}`)
-  .join("\n")}`);
-  }
-
-  // 기회 영역
-  if (insights.opportunityAreas.length > 0) {
-    sections.push(`🌟 성장 기회:
-${insights.opportunityAreas
-  .map((opp: string, i: number) => `${i + 1}. ${opp}`)
-  .join("\n")}`);
-  }
-
-  return sections.join("\n\n");
-}
 
 function generateProfessionalInsights(
-  responses: any[],
-  customers: any[],
+  responses: ResponseRecord[],
+  customers: CustomerRecord[],
   nps: number,
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: any
+  visitAnalysis: Record<string, number>
 ) {
   const criticalIssues: string[] = [];
   const improvementPriorities: string[] = [];
@@ -544,12 +507,12 @@ function generateProfessionalInsights(
 }
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  request: Request,
+  { params }: { params: { id: string } }
+): Promise<Response> {
   try {
     console.log("=== 전문 AI 통계 분석 시작 ===");
-    const { id: surveyId } = await params;
+    const surveyId = params.id;
 
     const userId = "5e1f5903-b48d-4502-95cb-838df25fbf48";
 
@@ -564,7 +527,7 @@ export async function GET(
       return NextResponse.json(
         { error: "설문을 찾을 수 없습니다." },
         { status: 404 }
-      );
+      ) as Response;
     }
 
     // 최근 3개월 응답 데이터 조회
@@ -592,7 +555,7 @@ export async function GET(
       return NextResponse.json(
         { error: "응답 데이터를 불러올 수 없습니다." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     // 고객 정보 조회
@@ -605,7 +568,7 @@ export async function GET(
       return NextResponse.json(
         { error: "고객 데이터를 불러올 수 없습니다." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     console.log(
@@ -617,7 +580,7 @@ export async function GET(
         success: true,
         statistics: [],
         message: "분석할 데이터가 충분하지 않습니다.",
-      });
+      }) as Response;
     }
 
     // 전문적인 AI 분석 수행
@@ -667,11 +630,14 @@ export async function GET(
           customerSegments,
           visitFrequencyAnalysis,
           trends,
-          new Set(responses.map((r) => r.customer_info_id)).size,
+          new Set(responses.map((r: ResponseRecord) => r.customer_info_id))
+            .size,
           responses.length,
           responses
         ),
-        total_responses: new Set(responses.map((r) => r.customer_info_id)).size,
+        total_responses: new Set(
+          responses.map((r: ResponseRecord) => r.customer_info_id)
+        ).size,
         average_rating: csat / 20, // 5점 척도로 변환
         main_customer_age_group:
           customerSegments[0]?.segment.split(" ")[0] || "미분류",
@@ -714,20 +680,19 @@ export async function GET(
           opportunities: insights.opportunityAreas.length,
         },
       },
-    });
-  } catch (error: any) {
+    }) as Response;
+  } catch (err: unknown) {
+    const error = err as Error;
     console.error("=== AI 통계 분석 오류 ===", error);
-    return NextResponse.json(
-      { error: "AI 분석 중 오류가 발생했습니다." },
-      { status: 500 }
-    );
+    const message = error.message || "AI 분석 중 오류가 발생했습니다.";
+    return NextResponse.json({ error: message }, { status: 500 }) as Response;
   }
 }
 
 // AI 통계 재생성을 위한 POST 엔드포인트
 export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  request: Request,
+  { params }: { params: { id: string } }
+): Promise<Response> {
   return GET(request, { params });
 }

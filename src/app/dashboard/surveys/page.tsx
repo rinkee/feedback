@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +8,6 @@ import EmptyState from "@/components/EmptyState";
 import {
   Plus,
   Edit3,
-  Edit,
   Eye,
   ExternalLink,
   BarChart3,
@@ -37,24 +36,7 @@ export default function SurveysPage() {
   const [toggleLoading, setToggleLoading] = useState<string | null>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchSurveys();
-
-    // 외부 클릭시 드롭다운 닫기
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest(".dropdown-container")) {
-        setOpenDropdown(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const fetchSurveys = async () => {
+  const fetchSurveys = useCallback(async () => {
     try {
       setLoading(true);
       const {
@@ -86,13 +68,14 @@ export default function SurveysPage() {
 
       console.log("Found surveys:", surveysData);
       setSurveys(surveysData || []);
-    } catch (err: any) {
-      console.error("Unexpected error:", err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Unexpected error:", error);
       setError("예상치 못한 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   const toggleSurveyActive = async (
     surveyId: string,
@@ -124,21 +107,20 @@ export default function SurveysPage() {
       }
 
       // 로컬 상태 업데이트
-      setSurveys((prev) =>
-        prev.map((survey) => ({
-          ...survey,
-          is_active: survey.id === surveyId ? !currentActive : false,
-        }))
-      );
-
+      const updatedSurveys = surveys.map((survey) => ({
+        ...survey,
+        is_active: survey.id === surveyId ? !currentActive : false,
+      }));
+      setSurveys(updatedSurveys);
       alert(
         currentActive
           ? "설문이 비활성화되었습니다."
           : "설문이 활성화되었습니다."
       );
-    } catch (err: any) {
-      console.error("Toggle error:", err);
-      alert(err.message || "설문 상태 변경 중 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Toggle error:", error);
+      alert(error.message || "설문 상태 변경 중 오류가 발생했습니다.");
     } finally {
       setToggleLoading(null);
     }
@@ -210,11 +192,13 @@ export default function SurveysPage() {
       }
 
       // Refresh the list
-      setSurveys((prev) => prev.filter((survey) => survey.id !== surveyId));
+      const updatedSurveys = surveys.filter((survey) => survey.id !== surveyId);
+      setSurveys(updatedSurveys);
       alert("설문이 성공적으로 삭제되었습니다.");
-    } catch (err: any) {
-      console.error("Delete error:", err);
-      alert(err.message || "설문 삭제 중 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Delete error:", error);
+      alert(error.message || "설문 삭제 중 오류가 발생했습니다.");
     } finally {
       setDeleteLoading(null);
     }
@@ -229,6 +213,23 @@ export default function SurveysPage() {
       alert("클립보드 복사에 실패했습니다.");
     }
   };
+
+  useEffect(() => {
+    fetchSurveys();
+
+    // 외부 클릭시 드롭다운 닫기
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".dropdown-container")) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [fetchSurveys]);
 
   if (loading) {
     return (

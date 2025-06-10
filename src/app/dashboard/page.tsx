@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   BarChart,
   ThumbsUp,
-  Eye,
   AlertTriangle,
   TrendingUp,
   Users,
@@ -12,12 +11,8 @@ import {
   Star,
   Bot,
   Sparkles,
-  User,
-  X,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   BarChart as RechartsBarChart,
@@ -30,10 +25,9 @@ import {
   Cell,
 } from "recharts";
 import { supabase } from "@/lib/supabaseClient";
-import { User as AuthUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface Survey {
   id: string;
@@ -74,21 +68,6 @@ interface RecentResponse {
   };
 }
 
-interface ResponseModalData {
-  customer_info: {
-    name: string;
-    age_group: string;
-    gender: string;
-  };
-  responses: Array<{
-    question_text: string;
-    question_type: string;
-    response_text?: string;
-    rating?: number;
-    selected_option?: string;
-  }>;
-  created_at: string;
-}
 
 // 차트 데이터 인터페이스
 interface RevisitTrendData {
@@ -109,13 +88,17 @@ interface RatingDistribution {
 }
 
 // 필수 질문 인터페이스 추가
+interface QuestionOptions {
+  choices_text?: string[];
+}
+
 interface RequiredQuestion {
   id: string;
   category: string;
   question_text: string;
   question_type: "rating" | "single_choice" | "text";
   is_active: boolean;
-  options?: { [key: string]: any };
+  options?: QuestionOptions;
 }
 
 // 카테고리별 통계 인터페이스 추가
@@ -128,7 +111,6 @@ interface CategoryStats {
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
   const [dashboardStats, setDashboardStats] = useState({
     totalCustomers: 0,
@@ -137,11 +119,7 @@ export default function DashboardPage() {
     unreadCount: 0,
     avgRating: 0,
   });
-  const [recentResponses, setRecentResponses] = useState<RecentResponse[]>([]);
   const [latestAIStats, setLatestAIStats] = useState<AIStatistic | null>(null);
-  const [selectedResponseData, setSelectedResponseData] =
-    useState<ResponseModalData | null>(null);
-  const [showResponseModal, setShowResponseModal] = useState(false);
 
   // 필수 질문 상태 추가
   const [requiredQuestions, setRequiredQuestions] = useState<
@@ -226,7 +204,7 @@ export default function DashboardPage() {
   };
 
   // 🚀 모든 데이터를 한 번에 가져오는 최적화된 함수
-  const fetchAllDashboardData = async (
+  const fetchAllDashboardData = useCallback(async (
     surveyId: string,
     questions: RequiredQuestion[]
   ) => {
@@ -235,13 +213,12 @@ export default function DashboardPage() {
 
       // 활성화된 질문들만 필터링
       const enabledQuestions = questions.filter((q) => q.is_active);
-      const enabledCategories = enabledQuestions.map((q) => q.category);
 
       // 모든 필요한 데이터를 5개의 쿼리로 가져오기
       const [
         { data: allResponses, error: responsesError },
         { data: allCustomers, error: customersError },
-        { data: aiStatsData, error: aiError },
+        { data: aiStatsData },
         { data: questionsData, error: questionsError },
         { data: requiredQuestionsData, error: requiredQuestionsError },
       ] = await Promise.all([
@@ -358,15 +335,15 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("❌ Error in optimized data fetch:", error);
     }
-  };
+  }, []);
 
   // 🔄 모든 데이터 처리를 한 번에 수행하는 함수
   const processAllData = (
-    responses: any[],
-    customers: any[],
+    responses: Array<Record<string, unknown>>,
+    customers: Array<Record<string, unknown>>,
     enabledQuestions: RequiredQuestion[],
-    questionsData: any[],
-    requiredQuestionsData: any[]
+    questionsData: Array<Record<string, unknown>>,
+    requiredQuestionsData: Array<Record<string, unknown>>
   ) => {
     console.log("🔄 Processing all data...");
 
@@ -569,7 +546,7 @@ export default function DashboardPage() {
 
   // 차트 데이터 처리
   const processChartData = (
-    responses: any[],
+    responses: Array<Record<string, unknown>>,
     enabledQuestions: RequiredQuestion[]
   ) => {
     console.log("🚀 Starting processChartData with:", {
@@ -672,7 +649,7 @@ export default function DashboardPage() {
   };
 
   // 최근 응답 처리
-  const processRecentResponses = (responses: any[]) => {
+  const processRecentResponses = (responses: RecentResponse[]) => {
     const validResponses = responses.filter(
       (r) => (r.response_text || r.rating) && r.customer_info
     );
@@ -692,14 +669,7 @@ export default function DashboardPage() {
       }
     });
 
-    const recentResponsesData = Array.from(customerResponseMap.values())
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      .slice(0, 5);
-
-    setRecentResponses(recentResponsesData);
+    // 최근 응답 목록은 현재 사용하지 않음
   };
 
   // 날짜 계산 헬퍼 함수
@@ -734,7 +704,6 @@ export default function DashboardPage() {
         setLoading(false);
         return;
       }
-      setUser(session.user);
 
       try {
         // 필수 질문 상태 가져오기
@@ -799,10 +768,7 @@ export default function DashboardPage() {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (event === "SIGNED_OUT" || !newSession) {
-          setUser(null);
           router.push("/login");
-        } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-          setUser(newSession?.user ?? null);
         }
       }
     );
@@ -810,7 +776,7 @@ export default function DashboardPage() {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, fetchAllDashboardData]);
 
   // Compute latest non-zero revisit trend entry for caption
   const latestRevisitEntry =
@@ -1059,7 +1025,7 @@ export default function DashboardPage() {
                                 formatter={(
                                   value: number,
                                   name: string,
-                                  props: any
+                                  props: { payload: { count: number } }
                                 ) => [
                                   `${Math.round(value)}% (${
                                     props.payload.count
@@ -1202,7 +1168,7 @@ export default function DashboardPage() {
                                   formatter={(
                                     value: number,
                                     name: string,
-                                    props: any
+                                    props: { payload: { count: number } }
                                   ) => [
                                     `${Math.round(value)}% (${
                                       props.payload.count
@@ -1444,7 +1410,7 @@ export default function DashboardPage() {
                               formatter={(
                                 value: number,
                                 name: string,
-                                props: any
+                                props: { payload: { count: number; rating: number } }
                               ) => [
                                 `${props.payload.count}명 (${value}%)`,
                                 `${props.payload.rating}점`,

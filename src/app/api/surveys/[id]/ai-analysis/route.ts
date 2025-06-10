@@ -2,13 +2,49 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { GoogleGenAI } from "@google/genai";
 
+interface AIResponse {
+  customer_info_id: string;
+  customer_info?: {
+    age_group?: string;
+    gender?: string;
+  };
+  questions: { question_text: string; question_type: string };
+  response_text?: string | null;
+  selected_option?: string | null;
+  selected_options?: string[] | null;
+  rating?: number | null;
+  created_at: string;
+  answers?: ResponseAnswer[];
+}
+
+interface ResponseAnswer {
+  question?: { question_text: string };
+  response_text?: string | null;
+  selected_option?: string | null;
+  selected_options?: string[] | null;
+  rating?: number | null;
+}
+
+interface StoreInfo {
+  store_name?: string;
+  store_type_broad?: string;
+  location?: string;
+  target_audience?: string;
+  price_range?: string;
+  menu?: Array<{ name: string; price?: number }>;
+  features?: string[];
+  description?: string;
+}
+
 export async function POST(
   request: Request,
+
   { params }: { params: { id: string } } // 1. params에서 Promise 래핑 제거
 ): Promise<Response> {
   try {
     console.log("=== AI Analysis API 시작 ===");
     const surveyId = params.id; // 2. await 없이 params.id로 직접 접근
+
     console.log("1. Survey ID:", surveyId);
 
     // 임시로 인증 체크 우회하고 기존 사용자 ID 사용 (테스트용)
@@ -27,7 +63,7 @@ export async function POST(
       return NextResponse.json(
         { error: `설문 조회 오류: ${surveyError.message}` },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     if (!surveyDataArray || surveyDataArray.length === 0) {
@@ -35,7 +71,7 @@ export async function POST(
       return NextResponse.json(
         { error: "설문을 찾을 수 없습니다." },
         { status: 404 }
-      );
+      ) as Response;
     }
 
     const surveyData = surveyDataArray[0];
@@ -47,7 +83,7 @@ export async function POST(
       return NextResponse.json(
         { error: "설문에 대한 접근 권한이 없습니다." },
         { status: 403 }
-      );
+      ) as Response;
     }
 
     // 설문 질문들 조회
@@ -63,7 +99,7 @@ export async function POST(
       return NextResponse.json(
         { error: `질문 조회 오류: ${questionsError.message}` },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     console.log("10. 질문 수:", questions?.length || 0);
@@ -76,7 +112,9 @@ export async function POST(
       .eq("user_id", userId)
       .single();
 
-    let storeInfo = null;
+    // FIX 2: 'storeInfo'의 타입을 'StoreInfo | undefined'로 명시하고 'undefined'로 초기화합니다.
+    // 'null' 대신 'undefined'를 사용하여 함수 시그니처와 타입을 일치시킵니다.
+    let storeInfo: StoreInfo | undefined = undefined;
     if (storeData && !storeError) {
       storeInfo = {
         store_name: storeData.store_name,
@@ -121,7 +159,7 @@ export async function POST(
       return NextResponse.json(
         { error: `응답 조회 오류: ${responsesError.message}` },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     console.log("13. 총 응답 수:", responses?.length || 0);
@@ -137,14 +175,16 @@ export async function POST(
           totalResponses: 0,
         },
         { status: 200 }
-      );
+      ) as Response;
     }
 
     // 고객별로 응답 그룹화
     console.log("15. 응답 데이터 그룹화...");
     const customerResponses = new Map();
 
-    responses.forEach((response) => {
+    // FIX 1: forEach 콜백의 'response' 매개변수에 명시적으로 'AIResponse' 타입을 지정합니다.
+    // 이렇게 하면 TypeScript가 'response' 객체의 속성을 알 수 있게 되어 'any' 타입 오류가 해결됩니다.
+    responses.forEach((response: AIResponse) => {
       const customerId = response.customer_info_id;
       if (!customerResponses.has(customerId)) {
         customerResponses.set(customerId, {
@@ -179,7 +219,7 @@ export async function POST(
 
     // AI 분석 결과를 데이터베이스에 저장
     console.log("19. 분석 결과 저장...");
-    const { data: savedAnalysis, error: saveError } = await supabase
+    const { error: saveError } = await supabase
       .from("ai_statistics")
       .insert({
         survey_id: surveyId,
@@ -212,17 +252,23 @@ export async function POST(
       keyStats: analysis.keyStats,
       totalResponses: customerResponses.size,
       surveyData: surveyData,
-    });
-  } catch (error: any) {
+    }) as Response;
+  } catch (err: unknown) {
+    const error = err as Error;
     console.error("=== AI 분석 오류 ===", error);
-    return NextResponse.json(
-      { error: error.message || "AI 분석 중 오류가 발생했습니다." },
-      { status: 500 }
-    );
+    const message = error.message || "AI 분석 중 오류가 발생했습니다.";
+    return NextResponse.json({ error: message }, { status: 500 }) as Response;
   }
 }
 
-async function generateAIAnalysis(data: any) {
+// 이 아래 함수들은 수정할 필요가 없습니다.
+// ... (generateAIAnalysis, performGeminiAnalysis 함수는 그대로 유지)
+async function generateAIAnalysis(data: {
+  survey: Record<string, unknown>;
+  questions: Array<{ question_text: string; question_type: string }>;
+  responses: AIResponse[];
+  storeInfo?: StoreInfo;
+}) {
   console.log("AI 분석 함수 시작...");
 
   const { survey, questions, responses, storeInfo } = data;
@@ -236,14 +282,14 @@ async function generateAIAnalysis(data: any) {
 
   console.log("통계 계산 중...");
 
-  responses.forEach((response: any) => {
-    if (response.customerInfo) {
-      const { age_group, gender } = response.customerInfo;
+  responses.forEach((response: AIResponse) => {
+    if (response.customer_info) {
+      const { age_group, gender } = response.customer_info;
       if (age_group) ageGroups[age_group] = (ageGroups[age_group] || 0) + 1;
       if (gender) genders[gender] = (genders[gender] || 0) + 1;
     }
 
-    response.answers.forEach((answer: any) => {
+    response.answers?.forEach((answer: ResponseAnswer) => {
       if (answer.rating !== null && answer.rating !== undefined) {
         ratings.push(answer.rating);
       }
@@ -325,7 +371,17 @@ async function generateAIAnalysis(data: any) {
   };
 }
 
-async function performGeminiAnalysis(data: any) {
+async function performGeminiAnalysis(data: {
+  survey: Record<string, unknown>;
+  questions: Array<{ question_text: string; question_type: string }>;
+  responses: AIResponse[];
+  keyStats: Record<string, unknown>;
+  ageGroups: Record<string, number>;
+  genders: Record<string, number>;
+  ratings: number[];
+  textResponses: string[];
+  storeInfo?: StoreInfo;
+}) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("Gemini API 키가 설정되지 않았습니다.");
   }
@@ -361,7 +417,8 @@ ${
 - 주요 메뉴: ${
         storeInfo.menu
           ?.map(
-            (item: any) => `${item.name} (${item.price?.toLocaleString()}원)`
+            (item: { name: string; price?: number }) =>
+              `${item.name} (${item.price?.toLocaleString()}원)`
           )
           .join(", ") || "정보 없음"
       }
@@ -377,7 +434,7 @@ ${
 ### 설문 질문들:
 ${questions
   .map(
-    (q: any, i: number) =>
+    (q: { question_text: string; question_type: string }, i: number) =>
       `${i + 1}. ${q.question_text} (유형: ${q.question_type})`
   )
   .join("\n")}
@@ -397,13 +454,13 @@ ${textResponses
 ### 고객 응답 상세 (처음 10명):
 ${responses
   .slice(0, 10)
-  .map((res: any, i: number) => {
-    return `응답자 ${i + 1} (${res.customerInfo?.age_group} ${
-      res.customerInfo?.gender
+  .map((res: AIResponse, i: number) => {
+    return `응답자 ${i + 1} (${res.customer_info?.age_group} ${
+      res.customer_info?.gender
     }):
 ${res.answers
-  .map(
-    (ans: any) =>
+  ?.map(
+    (ans: ResponseAnswer) =>
       `- ${ans.question?.question_text}: ${
         ans.response_text || ans.rating || ans.selected_option || "응답없음"
       }`

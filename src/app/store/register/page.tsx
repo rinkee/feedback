@@ -90,9 +90,10 @@ async function createInitialSurvey(userId: string, storeId: string) {
     console.log('Initial questions created successfully for survey ID:', surveyId);
     return { success: true, surveyId };
 
-  } catch (error: any) {
-    console.error('Unexpected error in createInitialSurvey:', error.message);
-    return { success: false, error: error.message || '초기 설문 생성 중 예상치 못한 오류가 발생했습니다.' };
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('Unexpected error in createInitialSurvey:', err.message);
+    return { success: false, error: err.message || '초기 설문 생성 중 예상치 못한 오류가 발생했습니다.' };
   }
 }
 
@@ -133,8 +134,6 @@ export default function StoreRegistrationPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -142,7 +141,6 @@ export default function StoreRegistrationPage() {
     setMessage("");
     setError("");
     setSuccessMessage("");
-    setErrorMessage("");
 
     if (!email || !password || !storeName || !businessRegistrationNumber) {
       setError(
@@ -216,10 +214,14 @@ export default function StoreRegistrationPage() {
         if (initialSurveyResult.success) {
           setSuccessMessage('가게 정보와 초기 설문지가 성공적으로 등록 및 생성되었습니다! 이메일 인증 후 로그인해주세요.');
         } else {
-          console.error("Failed to create initial survey:", initialSurveyResult.error);
-          // 가게 정보는 등록되었지만 설문 생성 실패. 사용자에게 알림.
-          setErrorMessage(`가게 정보는 등록되었습니다. 하지만 초기 설문지 생성에 실패했습니다: ${initialSurveyResult.error}. 이메일 인증 후 로그인하여 대시보드에서 설문지를 확인하거나 새로 만들어주세요.`);
-          setSuccessMessage(''); // 이전 성공 메시지 클리어
+          console.error(
+            "Failed to create initial survey:",
+            initialSurveyResult.error
+          );
+          setError(
+            `가게 정보는 등록되었습니다. 하지만 초기 설문지 생성에 실패했습니다: ${initialSurveyResult.error}. 이메일 인증 후 로그인하여 대시보드에서 설문지를 확인하거나 새로 만들어주세요.`
+          );
+          setSuccessMessage("");
         }
         
         // 공통 리디렉션 로직
@@ -227,19 +229,20 @@ export default function StoreRegistrationPage() {
           setLoading(false); // 모든 작업 완료 후 로딩 해제
           router.push('/login');
         }, 4000); // 메시지 확인 및 처리 시간을 위해 4초로 늘림
-      } else if (storeData && !storeData.id) { 
-          console.error('Store possibly created but ID not returned from Supabase.');
-          setErrorMessage('가게 정보는 등록된 것 같으나, ID를 가져오지 못했습니다. 잠시 후 다시 시도하거나 지원팀에 문의하세요.');
-          setLoading(false);
-      } else if (!storeData && !storeError) {
-          // storeError도 없고 storeData도 없는 경우 (이론적으로 .single() 사용 시 드묾)
-          console.error('Store creation failed silently or did not return data.');
-          setErrorMessage('가게 정보 등록에 실패했습니다 (데이터 반환 없음). 잠시 후 다시 시도해주세요.');
-          setLoading(false);
-      }
+        } else if (storeData && !storeData.id) {
+            console.error('Store possibly created but ID not returned from Supabase.');
+            setError('가게 정보는 등록된 것 같으나, ID를 가져오지 못했습니다. 잠시 후 다시 시도하거나 지원팀에 문의하세요.');
+            setLoading(false);
+        } else if (!storeData && !storeError) {
+            // storeError도 없고 storeData도 없는 경우 (이론적으로 .single() 사용 시 드묾)
+            console.error('Store creation failed silently or did not return data.');
+            setError('가게 정보 등록에 실패했습니다 (데이터 반환 없음). 잠시 후 다시 시도해주세요.');
+            setLoading(false);
+        }
       // storeError가 있는 경우는 이 블록 이전에 이미 처리됨 (기존 로직)
-    } catch (err: any) {
-      setError(err.message || "알 수 없는 오류가 발생했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "알 수 없는 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }

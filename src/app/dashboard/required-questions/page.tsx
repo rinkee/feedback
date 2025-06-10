@@ -2,27 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { User as AuthUser } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import {
   CheckSquare,
   Square,
   Star,
   Edit,
-  Plus,
   Save,
   X,
   AlertCircle,
-  Trash2,
   Settings,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+
+interface QuestionOptions {
+  required?: boolean;
+  maxRating?: number;
+  rating_min_label?: string;
+  rating_max_label?: string;
+  choices_text?: string[];
+  choice_ids?: string[];
+  isMultiSelect?: boolean;
+}
 
 interface RequiredQuestion {
   id: string;
   question_text: string;
   question_type: string;
-  options: any;
+  options: QuestionOptions;
   category: string;
   description: string;
   is_active: boolean;
@@ -42,18 +49,18 @@ interface UserRequiredQuestion {
 export default function RequiredQuestionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [userRequiredQuestions, setUserRequiredQuestions] = useState<
     UserRequiredQuestion[]
   >([]);
-  const [availableQuestions, setAvailableQuestions] = useState<
-    RequiredQuestion[]
-  >([]);
-  const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
+  // FIX: 상태 변수 이름을 'editingQuestionId'로 명확히 하여 ID를 저장함을 나타냄
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(
+    null
+  );
+
   const [editForm, setEditForm] = useState({
     question_text: "",
     description: "",
-    question_type: "rating",
+    question_type: "rating" as RequiredQuestion["question_type"], // 타입을 명확히 지정
     rating_min_label: "",
     rating_max_label: "",
     choices_text: [""],
@@ -230,8 +237,6 @@ export default function RequiredQuestionsPage() {
         return;
       }
 
-      setUser(session.user);
-
       try {
         // 모든 필수 질문 조회 (활성화된 질문만)
         const { data: allQuestions, error: allError } = await supabase
@@ -246,22 +251,27 @@ export default function RequiredQuestionsPage() {
           return;
         }
 
-        setAvailableQuestions(allQuestions || []);
-
         // 사용자의 필수 질문 설정 조회
-        const { data: userQuestions, error: userError } = await supabase
-          .from("user_required_questions")
-          .select("*")
-          .eq("user_id", session.user.id);
+        const { data: userQuestions, error: userQuestionsError } =
+          await supabase
+            .from("user_required_questions")
+            .select("*")
+            .eq("user_id", session.user.id);
+
+        if (userQuestionsError) {
+          console.error("Error fetching user questions:", userQuestionsError);
+        }
 
         const existingQuestionIds = new Set(
-          (userQuestions || []).map((uq) => uq.required_question_id)
+          (userQuestions || []).map(
+            (uq: UserRequiredQuestion) => uq.required_question_id
+          )
         );
 
         // 아직 설정하지 않은 질문들을 자동으로 추가 (모든 질문을 사용자 설정에 포함)
         const newQuestions = (allQuestions || [])
-          .filter((q) => !existingQuestionIds.has(q.id))
-          .map((q) => ({
+          .filter((q: RequiredQuestion) => !existingQuestionIds.has(q.id))
+          .map((q: RequiredQuestion) => ({
             user_id: session.user.id,
             required_question_id: q.id,
             is_enabled: q.is_active, // 기본 활성화 상태를 따름
@@ -286,7 +296,9 @@ export default function RequiredQuestionsPage() {
         if (finalError) {
           console.error("Error fetching final user questions:", finalError);
         } else {
-          setUserRequiredQuestions(finalUserQuestions || []);
+          setUserRequiredQuestions(
+            finalUserQuestions as UserRequiredQuestion[]
+          );
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -302,32 +314,32 @@ export default function RequiredQuestionsPage() {
     userQuestionId: string,
     currentState: boolean
   ) => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("user_required_questions")
-        .update({ is_enabled: !currentState })
-        .eq("id", userQuestionId);
+    // 1. 롤백을 위해 현재 상태를 저장
+    const originalQuestions = [...userRequiredQuestions];
 
-      if (error) {
-        console.error("Error updating question:", error);
-        alert("설정 변경 중 오류가 발생했습니다.");
-      } else {
-        setUserRequiredQuestions((prev) =>
-          prev.map((uq) =>
-            uq.id === userQuestionId ? { ...uq, is_enabled: !currentState } : uq
-          )
-        );
-      }
-    } catch (error) {
-      console.error("Error:", error);
+    // 2. UI를 먼저 업데이트하여 사용자 경험 향상
+    const updatedQuestions = originalQuestions.map((uq) =>
+      uq.id === userQuestionId ? { ...uq, is_enabled: !currentState } : uq
+    );
+    setUserRequiredQuestions(updatedQuestions);
+
+    // 3. 백그라운드에서 DB 업데이트 시도
+    const { error } = await supabase
+      .from("user_required_questions")
+      .update({ is_enabled: !currentState })
+      .eq("id", userQuestionId);
+
+    // 4. DB 업데이트 실패 시, UI를 원래 상태로 롤백
+    if (error) {
+      console.error("Error updating question:", error);
       alert("설정 변경 중 오류가 발생했습니다.");
+      setUserRequiredQuestions(originalQuestions); // 롤백
     }
-    setSaving(false);
   };
 
+  // FIX: startEditing 함수가 ID를 올바르게 설정하도록 함
   const startEditing = (question: RequiredQuestion) => {
-    setEditingQuestion(question.id);
+    setEditingQuestionId(question.id);
     setEditForm({
       question_text: question.question_text,
       description: question.description,
@@ -339,14 +351,13 @@ export default function RequiredQuestionsPage() {
   };
 
   const saveEdit = async () => {
-    if (!editingQuestion) return;
+    if (!editingQuestionId) return;
 
     setSaving(true);
     try {
-      const question = availableQuestions.find((q) => q.id === editingQuestion);
-      let updatedOptions: any = {};
+      let updatedOptions: QuestionOptions = {};
 
-      // 질문 유형에 따라 옵션 설정
+      // 질문 유형에 따라 옵션 설정 (기존과 동일)
       if (editForm.question_type === "rating") {
         updatedOptions = {
           required: false,
@@ -370,6 +381,7 @@ export default function RequiredQuestionsPage() {
         };
       }
 
+      // DB 업데이트 로직 (기존과 동일)
       const { error } = await supabase
         .from("required_questions")
         .update({
@@ -379,45 +391,38 @@ export default function RequiredQuestionsPage() {
           options: updatedOptions,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", editingQuestion);
+        .eq("id", editingQuestionId);
 
       if (error) {
         console.error("Error updating question:", error);
         alert("질문 수정 중 오류가 발생했습니다.");
       } else {
-        // 로컬 상태 업데이트
-        setAvailableQuestions((prev) =>
-          prev.map((q) =>
-            q.id === editingQuestion
-              ? {
-                  ...q,
-                  question_text: editForm.question_text,
-                  question_type: editForm.question_type,
-                  description: editForm.description,
-                  options: updatedOptions,
-                }
-              : q
-          )
-        );
+        // FIX: 로컬 상태 업데이트 로직 수정
 
-        setUserRequiredQuestions((prev) =>
-          prev.map((uq) =>
-            uq.required_questions.id === editingQuestion
-              ? {
-                  ...uq,
-                  required_questions: {
-                    ...uq.required_questions,
-                    question_text: editForm.question_text,
-                    question_type: editForm.question_type,
-                    description: editForm.description,
-                    options: updatedOptions,
-                  },
-                }
-              : uq
-          )
-        );
+        // 1. 기존 상태 배열(userRequiredQuestions)을 기반으로 새로운 배열을 먼저 생성합니다.
+        const updatedQuestions = userRequiredQuestions.map((uq) => {
+          if (uq.required_questions.id === editingQuestionId) {
+            // 수정 대상인 질문을 찾으면 새로운 내용으로 교체
+            return {
+              ...uq,
+              required_questions: {
+                ...uq.required_questions,
+                question_text: editForm.question_text,
+                question_type: editForm.question_type,
+                description: editForm.description,
+                options: updatedOptions,
+              },
+            };
+          }
+          // 수정 대상이 아니면 기존 질문을 그대로 반환
+          return uq;
+        });
 
-        setEditingQuestion(null);
+        // 2. 완성된 새 배열을 상태로 설정합니다.
+        setUserRequiredQuestions(updatedQuestions);
+
+        // 편집 상태 초기화
+        setEditingQuestionId(null);
         setEditForm({
           question_text: "",
           description: "",
@@ -534,7 +539,7 @@ export default function RequiredQuestionsPage() {
             )
             .map((userQuestion) => {
               const question = userQuestion.required_questions;
-              const isEditing = editingQuestion === question.id;
+              const isEditing = editingQuestionId === question.id;
 
               return (
                 <div
@@ -826,7 +831,7 @@ export default function RequiredQuestionsPage() {
                               </button>
                               <button
                                 onClick={() => {
-                                  setEditingQuestion(null);
+                                  setEditingQuestionId(null);
                                   setEditForm({
                                     question_text: "",
                                     description: "",

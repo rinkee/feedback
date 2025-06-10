@@ -1,23 +1,56 @@
 import { GoogleGenAI } from "@google/genai";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export async function POST(request: NextRequest) {
-  try {
-    const { description } = await request.json();
+interface MenuItem {
+  name: string;
+  price?: number;
+}
 
+interface StoreData {
+  menu?: MenuItem[];
+  features?: string[];
+  store_name?: string;
+  store_type_broad?: string;
+  location?: string;
+  target_audience?: string;
+  price_range?: string;
+  description?: string;
+}
+
+interface SurveyQuestion {
+  question_text: string;
+  question_type: "text" | "rating" | "single_choice" | "multiple_choice";
+  choices_text?: string[];
+  rating_min_label?: string;
+  rating_max_label?: string;
+}
+
+interface GeneratedSurvey {
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+}
+
+export async function POST(request: Request): Promise<Response> {
+  try {
+    // FIX 1: request.json()의 반환 타입을 명시적으로 지정하고 올바른 구조 분해 할당을 사용합니다.
+    // 이렇게 하면 'description'이 string 타입임을 TypeScript가 알게 되어 오류가 해결됩니다.
+    const { description } = (await request.json()) as { description: string };
+
+    // FIX 3: 'description' 변수가 위에서 올바르게 선언되었으므로, 이제 여기서 정상적으로 사용할 수 있습니다.
     if (!description || typeof description !== "string") {
       return NextResponse.json(
         { error: "설문 설명이 필요합니다." },
         { status: 400 }
-      );
+      ) as Response;
     }
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
         { error: "Gemini API 키가 설정되지 않았습니다." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     // Authorization 헤더에서 토큰 추출
@@ -26,7 +59,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "인증이 필요합니다." },
         { status: 401 }
-      );
+      ) as Response;
     }
 
     const token = authHeader.substring(7);
@@ -54,7 +87,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "인증이 필요합니다." },
         { status: 401 }
-      );
+      ) as Response;
     }
 
     console.log("=== 인증된 사용자 정보 ===");
@@ -70,6 +103,8 @@ export async function POST(request: NextRequest) {
       .select("*")
       .eq("user_id", user.id)
       .single();
+
+    storeData = storeData as StoreData | null;
 
     // RLS 문제로 조회 실패시 서비스 키로 재시도
     if (storeError && storeError.code === "PGRST116") {
@@ -95,10 +130,12 @@ export async function POST(request: NextRequest) {
 
     let storeContext = "";
     if (storeData && !storeError) {
+      // FIX 2: map 함수의 콜백 매개변수 'item'에 명시적으로 'MenuItem' 타입을 지정합니다.
       const menuItems =
         storeData.menu
           ?.map(
-            (item: any) => `${item.name} (${item.price?.toLocaleString()}원)`
+            (item: MenuItem) =>
+              `${item.name} (${item.price?.toLocaleString()}원)`
           )
           .join(", ") || "메뉴 정보 없음";
 
@@ -141,6 +178,7 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.GEMINI_API_KEY,
     });
 
+    // ... (이하 코드는 동일)
     const config = {
       responseMimeType: "application/json" as const,
       systemInstruction: [
@@ -318,11 +356,10 @@ ${storeContext}
             console.log(`Success with ${model} on attempt ${attempt}`);
             break;
           }
-        } catch (error: any) {
-          console.error(
-            `Error with ${model} attempt ${attempt}:`,
-            error.message
-          );
+        } catch (err: unknown) {
+          const error = err as Error;
+          const message = error.message || String(err);
+          console.error(`Error with ${model} attempt ${attempt}:`, message);
           lastError = error;
 
           // 503 또는 429 에러인 경우 잠시 대기 후 재시도
@@ -365,7 +402,7 @@ ${storeContext}
 
     try {
       // JSON 파싱
-      const survey = JSON.parse(fullText);
+      const survey = JSON.parse(fullText) as GeneratedSurvey;
 
       // 기본 유효성 검사
       if (
@@ -377,7 +414,7 @@ ${storeContext}
       }
 
       // 질문 유효성 검사 및 정리
-      survey.questions = survey.questions.map((q: any) => {
+      survey.questions = survey.questions.map((q: SurveyQuestion) => {
         if (!q.question_text || !q.question_type) {
           throw new Error("질문 형식이 올바르지 않습니다");
         }
@@ -418,7 +455,7 @@ ${storeContext}
         return q;
       });
 
-      return NextResponse.json({ survey });
+      return NextResponse.json({ survey }) as Response;
     } catch (parseError) {
       console.error("JSON 파싱 오류:", parseError);
       console.error("원본 응답:", fullText);
@@ -426,21 +463,23 @@ ${storeContext}
       return NextResponse.json(
         { error: "AI 응답을 파싱하는 데 실패했습니다. 다시 시도해주세요." },
         { status: 500 }
-      );
+      ) as Response;
     }
-  } catch (error: any) {
+  } catch (err: unknown) {
+    const error = err as Error;
     console.error("설문 생성 오류:", error);
 
-    if (error.message?.includes("API key")) {
+    const message = error.message || String(err);
+    if (message.includes("API key")) {
       return NextResponse.json(
         { error: "AI 서비스 연결에 실패했습니다. API 키를 확인해주세요." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     return NextResponse.json(
       { error: "설문 생성 중 오류가 발생했습니다. 다시 시도해주세요." },
       { status: 500 }
-    );
+    ) as Response;
   }
 }

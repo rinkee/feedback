@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
-import { useState, FormEvent } from 'react';
+import React, { useState, FormEvent } from 'react';
 import { supabase } from '@/lib/supabaseClient'; // Ensure this path is correct
 
 export default function Auth() {
@@ -48,9 +47,10 @@ export default function Auth() {
         setMessage('Action completed. Please check your email if signing up.');
       }
 
-    } catch (err: any) {
-      console.error('Authentication error:', err);
-      setError(err.message || 'An unexpected error occurred.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Authentication error:', error);
+      setError(error.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,9 @@ export default function Auth() {
               className="block w-full px-3 py-2 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               placeholder="Email address"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEmail(e.target.value)
+              }
             />
           </div>
           <div>
@@ -92,7 +94,9 @@ export default function Auth() {
               className="block w-full px-3 py-2 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               placeholder="Password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setPassword(e.target.value)
+              }
             />
           </div>
           <div>

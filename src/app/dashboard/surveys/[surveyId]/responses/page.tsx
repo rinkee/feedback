@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -17,12 +17,10 @@ import {
   AlertTriangle,
   Loader2,
   Copy,
-  MessageSquare,
   Bot,
   Sparkles,
   TrendingUp,
   History,
-  ChevronDown,
   ChevronRight,
   ChevronLeft,
   ThumbsUp,
@@ -51,11 +49,18 @@ interface Response {
   updated_at: string;
 }
 
+// options의 구체적인 형태를 위한 인터페이스를 새로 정의합니다.
+interface QuestionOptions {
+  choices_text?: string[];
+  // 다른 옵션 속성이 있다면 여기에 추가할 수 있습니다.
+  // 예: rating_min_label?: string;
+}
+
 interface Question {
   id: string;
   question_text: string;
   question_type: string;
-  options?: any;
+  options?: QuestionOptions; // 구체적인 타입으로 변경
   order_num: number;
 }
 
@@ -75,7 +80,7 @@ interface ResponseData {
 interface AIStatistic {
   id: string;
   summary: string;
-  statistics: any;
+  statistics: Record<string, unknown>;
   recommendations: string;
   analysis_date: string;
   total_responses: number;
@@ -111,22 +116,8 @@ export default function SurveyResponsesPage() {
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAnalysisHistory, setShowAnalysisHistory] = useState(false);
-  const [expandedRecommendations, setExpandedRecommendations] = useState(false);
 
-  // 통계 데이터
-  const [stats, setStats] = useState({
-    totalResponses: 0,
-    ageGroups: {} as Record<string, number>,
-    genders: {} as Record<string, number>,
-    averageRatings: {} as Record<string, number>,
-  });
-
-  useEffect(() => {
-    fetchSurveyData();
-    fetchAIStatistics();
-  }, [surveyId]);
-
-  const fetchSurveyData = async () => {
+  const fetchSurveyData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -189,15 +180,17 @@ export default function SurveyResponsesPage() {
 
       // 5. 데이터 조합
       const combinedData: ResponseData[] = (customerInfoData || []).map(
-        (customer) => {
+        (customer: CustomerInfo) => {
           const userResponses = (responsesData || []).filter(
-            (response) => response.customer_info_id === customer.id
+            (
+              response: Response & { customer_info_id: string } // 'response' 타입 지정
+            ) => response.customer_info_id === customer.id
           );
 
           return {
             customer_info: customer,
             responses: userResponses,
-            user_id: customer.user_id,
+            user_id: userId,
           };
         }
       );
@@ -211,15 +204,16 @@ export default function SurveyResponsesPage() {
 
       // 6. 통계 계산
       calculateStats(filteredData, questionsData || []);
-    } catch (err: any) {
-      console.error("Error fetching survey data:", err);
-      setError(err.message || "데이터를 불러오는데 실패했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Error fetching survey data:", error);
+      setError(error.message || "데이터를 불러오는데 실패했습니다.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [surveyId, router]);
 
-  const fetchAIStatistics = async () => {
+  const fetchAIStatistics = useCallback(async () => {
     try {
       const response = await fetch(`/api/surveys/${surveyId}/ai-statistics`);
 
@@ -230,10 +224,10 @@ export default function SurveyResponsesPage() {
           setLatestAiAnalysis(data.statistics[0]);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("AI 통계 조회 오류:", error);
     }
-  };
+  }, [surveyId, router]);
 
   const generateAIAnalysis = async () => {
     if (responsesData.length === 0) {
@@ -283,7 +277,7 @@ export default function SurveyResponsesPage() {
         const errorData = await response.json();
         alert(`AI 분석 실패: ${errorData.error}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("AI 분석 오류:", error);
       alert("AI 분석 중 오류가 발생했습니다.");
     } finally {
@@ -292,7 +286,6 @@ export default function SurveyResponsesPage() {
   };
 
   const calculateStats = (data: ResponseData[], questions: Question[]) => {
-    const totalResponses = data.length;
     const ageGroups: Record<string, number> = {};
     const genders: Record<string, number> = {};
     const averageRatings: Record<string, number> = {};
@@ -322,12 +315,7 @@ export default function SurveyResponsesPage() {
       }
     });
 
-    setStats({
-      totalResponses,
-      ageGroups,
-      genders,
-      averageRatings,
-    });
+    // 통계 상태 업데이트는 생략
   };
 
   const formatResponse = (response: Response, question: Question) => {
@@ -341,25 +329,27 @@ export default function SurveyResponsesPage() {
       return `${response.rating}점`;
     }
 
+    // 옵셔널 체이닝(?.)을 사용하여 options와 choices_text에 안전하게 접근합니다.
+    const choices = question.options?.choices_text;
+
     // 다중선택 응답 처리
     if (response.selected_options && Array.isArray(response.selected_options)) {
-      if (
-        question.options &&
-        question.options.choices_text &&
-        Array.isArray(question.options.choices_text)
-      ) {
+      // choices가 존재하고 배열인지 확인합니다.
+      if (choices && Array.isArray(choices)) {
         const formattedOptions = response.selected_options.map((option) => {
           const match = option.match(/^choice_(\d+)$/);
           if (match) {
             const index = parseInt(match[1]) - 1;
-            if (question.options.choices_text[index]) {
-              return question.options.choices_text[index];
+            // choices[index]가 유효한지 확인합니다.
+            if (choices[index]) {
+              return choices[index];
             }
           }
           return option;
         });
         return formattedOptions.join(", ");
       }
+      // choices가 없다면 그냥 원래 값을 반환합니다.
       return response.selected_options.join(", ");
     }
 
@@ -450,6 +440,25 @@ export default function SurveyResponsesPage() {
       setSelectedGender(value);
     }
   };
+
+  useEffect(() => {
+    fetchSurveyData();
+    fetchAIStatistics();
+  }, [surveyId, fetchSurveyData, fetchAIStatistics]);
+
+  // 3. 렌더링에 필요한 데이터 계산 (★★ 바로 여기에 선언합니다 ★★)
+  // latestAiAnalysis가 있을 때만 계산하도록 안전장치를 추가합니다.
+  const npsValue = (latestAiAnalysis?.statistics?.nps as number) ?? 0;
+  const npsStatus = npsValue > 50 ? "우수" : npsValue > 0 ? "보통" : "개선필요";
+
+  const csatValue = (latestAiAnalysis?.statistics?.csat as number) ?? 0;
+  const csatStatus =
+    csatValue > 80 ? "우수" : csatValue > 60 ? "보통" : "개선필요";
+
+  const loyaltyValue =
+    (latestAiAnalysis?.statistics?.loyaltyIndex as number) ?? 0;
+  const loyaltyStatus =
+    loyaltyValue > 70 ? "높음" : loyaltyValue > 50 ? "보통" : "낮음";
 
   if (loading) {
     return (
@@ -653,15 +662,9 @@ export default function SurveyResponsesPage() {
                     </div>
                   </div>
                   <p className="text-3xl font-bold text-blue-600 mb-1">
-                    {latestAiAnalysis.statistics?.nps || 0}
+                    {npsValue}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {(latestAiAnalysis.statistics?.nps || 0) > 50
-                      ? "우수"
-                      : (latestAiAnalysis.statistics?.nps || 0) > 0
-                      ? "보통"
-                      : "개선필요"}
-                  </p>
+                  <p className="text-xs text-gray-500">{npsStatus}</p>
                 </div>
 
                 {/* CSAT 카드 */}
@@ -682,15 +685,9 @@ export default function SurveyResponsesPage() {
                     </div>
                   </div>
                   <p className="text-3xl font-bold text-green-600 mb-1">
-                    {latestAiAnalysis.statistics?.csat || 0}%
+                    {csatValue}%
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {(latestAiAnalysis.statistics?.csat || 0) > 80
-                      ? "우수"
-                      : (latestAiAnalysis.statistics?.csat || 0) > 60
-                      ? "보통"
-                      : "개선필요"}
-                  </p>
+                  <p className="text-xs text-gray-500">{csatStatus}</p>
                 </div>
 
                 {/* 충성도 카드 */}
@@ -702,15 +699,9 @@ export default function SurveyResponsesPage() {
                     </h4>
                   </div>
                   <p className="text-3xl font-bold text-purple-600 mb-1">
-                    {latestAiAnalysis.statistics?.loyaltyIndex || 0}%
+                    {loyaltyValue}%
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {(latestAiAnalysis.statistics?.loyaltyIndex || 0) > 70
-                      ? "높음"
-                      : (latestAiAnalysis.statistics?.loyaltyIndex || 0) > 50
-                      ? "보통"
-                      : "낮음"}
-                  </p>
+                  <p className="text-xs text-gray-500">{loyaltyStatus}</p>
                 </div>
               </div>
 
@@ -983,7 +974,7 @@ export default function SurveyResponsesPage() {
                 {/* 응답 목록 - 그리드 형태 */}
                 <div className="p-6">
                   <div className="grid gap-6">
-                    {currentPageData.map((responseData, index) => (
+                    {currentPageData.map((responseData) => (
                       <div
                         key={responseData.customer_info.id}
                         className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-all duration-200"
@@ -1039,8 +1030,7 @@ export default function SurveyResponsesPage() {
                                   <div>
                                     {question.question_type === "text" && (
                                       <p className="text-sm text-gray-800 bg-white p-3 rounded border-l-2 border-gray-400">
-                                        "{response.response_text || "응답 없음"}
-                                        "
+                                        {response.response_text || "응답 없음"}
                                       </p>
                                     )}
 
