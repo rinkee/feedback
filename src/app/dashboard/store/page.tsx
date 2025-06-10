@@ -129,7 +129,7 @@ export default function StorePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     fetchStoreInfo();
