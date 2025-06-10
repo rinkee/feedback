@@ -15,11 +15,21 @@ import {
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
+interface QuestionOptions {
+  required?: boolean;
+  maxRating?: number;
+  rating_min_label?: string;
+  rating_max_label?: string;
+  choices_text?: string[];
+  choice_ids?: string[];
+  isMultiSelect?: boolean;
+}
+
 interface RequiredQuestion {
   id: string;
   question_text: string;
   question_type: string;
-  options: Record<string, unknown>;
+  options: QuestionOptions;
   category: string;
   description: string;
   is_active: boolean;
@@ -341,7 +351,7 @@ export default function RequiredQuestionsPage() {
 
     setSaving(true);
     try {
-      let updatedOptions: Record<string, unknown> = {};
+      let updatedOptions: QuestionOptions = {};
 
       // 질문 유형에 따라 옵션 설정
       if (editForm.question_type === "rating") {

@@ -88,13 +88,17 @@ interface RatingDistribution {
 }
 
 // 필수 질문 인터페이스 추가
+interface QuestionOptions {
+  choices_text?: string[];
+}
+
 interface RequiredQuestion {
   id: string;
   category: string;
   question_text: string;
   question_type: "rating" | "single_choice" | "text";
   is_active: boolean;
-  options?: Record<string, unknown>;
+  options?: QuestionOptions;
 }
 
 // 카테고리별 통계 인터페이스 추가
