@@ -5,6 +5,7 @@ interface EmptyStateProps {
   title: string;
   description?: string;
   variant?: "default" | "chart" | "card";
+  
 }
 
 const EmptyState = ({
@@ -12,6 +13,7 @@ const EmptyState = ({
   title,
   description,
   variant,
+  
 }: EmptyStateProps) => {
   if (variant === "chart") {
     return (

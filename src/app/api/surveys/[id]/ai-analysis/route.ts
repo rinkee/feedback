@@ -38,12 +38,11 @@ interface StoreInfo {
 
 export async function POST(
   request: Request,
-
-  { params }: { params: { id: string } } // 1. params에서 Promise 래핑 제거
+  { params }: { params: { id: string } }
 ): Promise<Response> {
   try {
     console.log("=== AI Analysis API 시작 ===");
-    const surveyId = params.id; // 2. await 없이 params.id로 직접 접근
+    const { id: surveyId } = params;
 
     console.log("1. Survey ID:", surveyId);
 
