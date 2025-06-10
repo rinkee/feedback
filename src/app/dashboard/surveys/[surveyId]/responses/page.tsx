@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -17,12 +17,10 @@ import {
   AlertTriangle,
   Loader2,
   Copy,
-  MessageSquare,
   Bot,
   Sparkles,
   TrendingUp,
   History,
-  ChevronDown,
   ChevronRight,
   ChevronLeft,
   ThumbsUp,
@@ -111,22 +109,13 @@ export default function SurveyResponsesPage() {
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAnalysisHistory, setShowAnalysisHistory] = useState(false);
-  const [expandedRecommendations, setExpandedRecommendations] = useState(false);
-
-  // 통계 데이터
-  const [stats, setStats] = useState({
-    totalResponses: 0,
-    ageGroups: {} as Record<string, number>,
-    genders: {} as Record<string, number>,
-    averageRatings: {} as Record<string, number>,
-  });
 
   useEffect(() => {
     fetchSurveyData();
     fetchAIStatistics();
-  }, [surveyId]);
+  }, [surveyId, fetchSurveyData, fetchAIStatistics]);
 
-  const fetchSurveyData = async () => {
+  const fetchSurveyData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -218,9 +207,9 @@ export default function SurveyResponsesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [surveyId]);
 
-  const fetchAIStatistics = async () => {
+  const fetchAIStatistics = useCallback(async () => {
     try {
       const response = await fetch(`/api/surveys/${surveyId}/ai-statistics`);
 
@@ -234,7 +223,7 @@ export default function SurveyResponsesPage() {
     } catch (error: unknown) {
       console.error("AI 통계 조회 오류:", error);
     }
-  };
+  }, [surveyId]);
 
   const generateAIAnalysis = async () => {
     if (responsesData.length === 0) {
@@ -293,7 +282,6 @@ export default function SurveyResponsesPage() {
   };
 
   const calculateStats = (data: ResponseData[], questions: Question[]) => {
-    const totalResponses = data.length;
     const ageGroups: Record<string, number> = {};
     const genders: Record<string, number> = {};
     const averageRatings: Record<string, number> = {};
@@ -323,12 +311,7 @@ export default function SurveyResponsesPage() {
       }
     });
 
-    setStats({
-      totalResponses,
-      ageGroups,
-      genders,
-      averageRatings,
-    });
+    // 통계 상태 업데이트는 생략
   };
 
   const formatResponse = (response: Response, question: Question) => {
@@ -984,7 +967,7 @@ export default function SurveyResponsesPage() {
                 {/* 응답 목록 - 그리드 형태 */}
                 <div className="p-6">
                   <div className="grid gap-6">
-                    {currentPageData.map((responseData, index) => (
+                    {currentPageData.map((responseData) => (
                       <div
                         key={responseData.customer_info.id}
                         className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-all duration-200"
@@ -1040,8 +1023,7 @@ export default function SurveyResponsesPage() {
                                   <div>
                                     {question.question_type === "text" && (
                                       <p className="text-sm text-gray-800 bg-white p-3 rounded border-l-2 border-gray-400">
-                                        "{response.response_text || "응답 없음"}
-                                        "
+                                        {response.response_text || "응답 없음"}
                                       </p>
                                     )}
 

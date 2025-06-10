@@ -35,7 +35,7 @@ interface RestaurantInsights {
 }
 
 // NPS 계산 (추천 의사 기반)
-function calculateNPS(responses: any[]): number {
+function calculateNPS(responses: Array<Record<string, unknown>>): number {
   const recommendationResponses = responses.filter(
     (r) => r.required_question_category === "recommendation" && r.rating
   );
@@ -43,13 +43,11 @@ function calculateNPS(responses: any[]): number {
   if (recommendationResponses.length === 0) return 0;
 
   let promoters = 0,
-    passives = 0,
     detractors = 0;
 
   recommendationResponses.forEach((r) => {
     if (r.rating >= 4) promoters++;
-    else if (r.rating === 3) passives++;
-    else detractors++;
+    else if (r.rating !== 3) detractors++;
   });
 
   const total = recommendationResponses.length;
@@ -57,7 +55,7 @@ function calculateNPS(responses: any[]): number {
 }
 
 // CSAT 계산 (전반적 만족도 기반)
-function calculateCSAT(responses: any[]): number {
+function calculateCSAT(responses: Array<Record<string, unknown>>): number {
   const satisfactionResponses = responses.filter(
     (r) => r.required_question_category === "overall_satisfaction" && r.rating
   );
@@ -71,7 +69,7 @@ function calculateCSAT(responses: any[]): number {
 }
 
 // 고객 충성도 지수 계산
-function calculateLoyaltyIndex(responses: any[]): number {
+function calculateLoyaltyIndex(responses: Array<Record<string, unknown>>): number {
   const revisitResponses = responses.filter(
     (r) => r.required_question_category === "revisit_intention" && r.rating
   );
@@ -93,7 +91,7 @@ function calculateLoyaltyIndex(responses: any[]): number {
 }
 
 // 방문빈도별 고객 세분화
-function analyzeVisitFrequency(responses: any[]) {
+function analyzeVisitFrequency(responses: Array<Record<string, unknown>>) {
   const visitFreqResponses = responses.filter(
     (r) =>
       r.required_question_category === "visit_frequency" && r.selected_option
@@ -131,10 +129,10 @@ function analyzeVisitFrequency(responses: any[]) {
 
 // 고객 세그먼트별 분석
 function analyzeCustomerSegments(
-  responses: any[],
-  customers: any[]
+  responses: Array<Record<string, unknown>>,
+  customers: Array<Record<string, unknown>>
 ): CustomerSegment[] {
-  const segments: { [key: string]: any[] } = {};
+  const segments: { [key: string]: Array<Record<string, unknown>> } = {};
 
   customers.forEach((customer) => {
     const customerResponses = responses.filter(
@@ -209,7 +207,7 @@ function analyzeCustomerSegments(
 }
 
 // 트렌드 분석
-function analyzeTrends(responses: any[]): {
+function analyzeTrends(responses: Array<Record<string, unknown>>): {
   satisfactionTrend: string;
   growthPotential: string;
 } {
@@ -265,11 +263,11 @@ function generateDataBasedSummary(
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: any,
-  trends: any,
+  visitAnalysis: Record<string, unknown>,
+  trends: Record<string, unknown>,
   totalCustomers: number,
   totalResponses: number,
-  responses: any[]
+  responses: Array<Record<string, unknown>>
 ): string {
   // 실제 응답 데이터의 날짜 범위 계산
   const responseDates = responses.map((r) => new Date(r.created_at)).sort();
@@ -323,68 +321,15 @@ ${
 }
 
 // 전문적인 인사이트 및 액션 아이템 생성
-function generateDetailedRecommendations(insights: any): string {
-  const sections = [];
-
-  // 긴급 개선사항
-  if (insights.criticalIssues.length > 0) {
-    sections.push(`🚨 긴급 조치 필요:
-${insights.criticalIssues
-  .map((issue: string, i: number) => `${i + 1}. ${issue}`)
-  .join("\n")}`);
-  }
-
-  // 우선순위 개선사항
-  if (insights.improvementPriorities.length > 0) {
-    sections.push(`📋 우선순위 개선사항:
-${insights.improvementPriorities
-  .map((priority: string, i: number) => `${i + 1}. ${priority}`)
-  .join("\n")}`);
-  }
-
-  // 단점 개선 방안
-  if (insights.weaknessImprovements.length > 0) {
-    sections.push(`🔧 단점 개선 방안:
-${insights.weaknessImprovements
-  .map((improvement: string, i: number) => `${i + 1}. ${improvement}`)
-  .join("\n")}`);
-  }
-
-  // 장점 활용 전략
-  if (insights.strengthLeverage.length > 0) {
-    sections.push(`💪 장점 활용 전략:
-${insights.strengthLeverage
-  .map((leverage: string, i: number) => `${i + 1}. ${leverage}`)
-  .join("\n")}`);
-  }
-
-  // 전략적 권장사항
-  if (insights.strategicRecommendations.length > 0) {
-    sections.push(`🎯 전략적 권장사항:
-${insights.strategicRecommendations
-  .map((rec: string, i: number) => `${i + 1}. ${rec}`)
-  .join("\n")}`);
-  }
-
-  // 기회 영역
-  if (insights.opportunityAreas.length > 0) {
-    sections.push(`🌟 성장 기회:
-${insights.opportunityAreas
-  .map((opp: string, i: number) => `${i + 1}. ${opp}`)
-  .join("\n")}`);
-  }
-
-  return sections.join("\n\n");
-}
 
 function generateProfessionalInsights(
-  responses: any[],
-  customers: any[],
+  responses: Array<Record<string, unknown>>,
+  customers: Array<Record<string, unknown>>,
   nps: number,
   csat: number,
   loyaltyIndex: number,
   segments: CustomerSegment[],
-  visitAnalysis: any
+  visitAnalysis: Record<string, unknown>
 ) {
   const criticalIssues: string[] = [];
   const improvementPriorities: string[] = [];
@@ -715,10 +660,11 @@ export async function GET(
         },
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("=== AI 통계 분석 오류 ===", error);
+    const message = error instanceof Error ? error.message : "AI 분석 중 오류가 발생했습니다.";
     return NextResponse.json(
-      { error: "AI 분석 중 오류가 발생했습니다." },
+      { error: message },
       { status: 500 }
     );
   }

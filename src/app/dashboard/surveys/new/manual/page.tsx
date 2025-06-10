@@ -25,13 +25,24 @@ interface Question {
   rating_max_label?: string;
 }
 
+interface RequiredQuestion {
+  id: string;
+  question_text: string;
+  question_type: string;
+  options?: Record<string, unknown> | null;
+  order_num: number;
+  is_active: boolean;
+  rating_min_label?: string;
+  rating_max_label?: string;
+}
+
 export default function ManualSurveyPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [requiredQuestions, setRequiredQuestions] = useState<any[]>([]);
+  const [requiredQuestions, setRequiredQuestions] = useState<RequiredQuestion[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -69,10 +80,10 @@ export default function ManualSurveyPage() {
             .eq("required_questions.is_active", true);
 
         if (!requiredQuestionsError && userRequiredQuestions) {
-          const requiredQuestionsData = userRequiredQuestions
-            .map((urq: any) => urq.required_questions)
-            .filter((rq: any) => rq && rq.is_active)
-            .sort((a: any, b: any) => a.order_num - b.order_num);
+          const requiredQuestionsData = (userRequiredQuestions as { required_questions: RequiredQuestion }[])
+            .map((urq) => urq.required_questions)
+            .filter((rq): rq is RequiredQuestion => rq && rq.is_active)
+            .sort((a, b) => a.order_num - b.order_num);
 
           setRequiredQuestions(requiredQuestionsData);
           console.log("조회된 필수질문들:", requiredQuestionsData);
@@ -102,7 +113,11 @@ export default function ManualSurveyPage() {
     ]);
   };
 
-  const updateQuestion = (index: number, field: keyof Question, value: any) => {
+  const updateQuestion = (
+    index: number,
+    field: keyof Question,
+    value: unknown
+  ) => {
     const newQuestions = [...questions];
     newQuestions[index] = { ...newQuestions[index], [field]: value };
 
@@ -294,13 +309,13 @@ export default function ManualSurveyPage() {
       console.log("생성된 설문 ID:", newSurveyId);
 
       // 3. 사용자가 활성화한 필수질문들 조회 및 추가
-      let allQuestionsToInsert: any[] = [];
+      let allQuestionsToInsert: Record<string, unknown>[] = [];
 
       // 필수질문들을 먼저 추가 (앞쪽에 배치) - 활성화된 것만
       if (requiredQuestions.length > 0) {
         const requiredQuestionData = requiredQuestions.map(
-          (rq: any, index: number) => {
-            const questionData: any = {
+          (rq: RequiredQuestion, index: number) => {
+            const questionData: Record<string, unknown> = {
               survey_id: newSurveyId,
               store_id: storeId,
               question_text: rq.question_text,
@@ -329,7 +344,7 @@ export default function ManualSurveyPage() {
 
       // 4. 사용자가 만든 질문들 추가 (필수질문 뒤에 배치)
       const userQuestionsToInsert = questions.map((q, index) => {
-        const questionData: any = {
+        const questionData: Record<string, unknown> = {
           survey_id: newSurveyId,
           store_id: storeId,
           question_text: q.question_text.trim(),
@@ -390,10 +405,11 @@ export default function ManualSurveyPage() {
       setTimeout(() => {
         router.push("/dashboard/surveys");
       }, 2000);
-    } catch (err: any) {
-      console.error("Error creating survey:", err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Error creating survey:", error);
       setError(
-        "설문 생성에 실패했습니다: " + (err.message || "알 수 없는 오류")
+        "설문 생성에 실패했습니다: " + (error.message || "알 수 없는 오류")
       );
     } finally {
       setCreating(false);

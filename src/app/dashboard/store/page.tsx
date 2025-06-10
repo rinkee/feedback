@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -88,11 +88,7 @@ export default function StorePage() {
     description: "",
   });
 
-  useEffect(() => {
-    fetchStoreInfo();
-  }, []);
-
-  const fetchStoreInfo = async () => {
+  const fetchStoreInfo = useCallback(async () => {
     try {
       const {
         data: { session },
@@ -133,7 +129,11 @@ export default function StorePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    fetchStoreInfo();
+  }, [fetchStoreInfo]);
 
   const handleSave = async () => {
     setSaving(true);

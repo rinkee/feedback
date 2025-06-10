@@ -4,21 +4,7 @@
 import { useEffect, useState, FormEvent, useRef } from "react";
 import { useParams, useRouter } from "next/navigation"; // Added useRouter
 import { supabase } from "@/lib/supabaseClient";
-import {
-  AlertTriangle,
-  CheckCircle,
-  Loader2,
-  Send,
-  User,
-  X,
-  Edit3,
-  Star,
-  CheckSquare,
-  MessageSquare,
-  ChevronRight,
-  Clock,
-  Award,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 
 interface SurveyOption {
   id: string;

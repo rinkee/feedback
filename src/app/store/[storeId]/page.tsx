@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { ArrowRight, ArrowLeft, CheckCircle, AlertCircle, User, Cake, VenetianMask, Send, MessageSquare, Star, Check } from 'lucide-react';
+import { ArrowRight, ArrowLeft, CheckCircle, AlertCircle, User, Cake, VenetianMask, Send, Star, Check } from 'lucide-react';
 
 interface SurveyQuestion {
   id: string;
@@ -74,7 +74,7 @@ export default function StoreSurveyPage({ params }: Props) {
     setError(null); // Clear any previous errors
   };
 
-  const handleAnswerChange = (questionId: string, value: string | number, questionType?: 'select', isMulti?: boolean, optionIndex?: number) => {
+  const handleAnswerChange = (questionId: string, value: string | number, questionType?: 'select', isMulti?: boolean) => {
     setError(null); // Clear error on new answer
 
     if (questionType === 'select') {
@@ -147,9 +147,10 @@ export default function StoreSurveyPage({ params }: Props) {
       }
       setMessage('설문이 성공적으로 제출되었습니다! 참여해주셔서 감사합니다.');
       setCurrentOverallStep(3); // Show thank you page
-    } catch (err: any) {
-      console.error('Submission error:', err);
-      setError(err.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Submission error:', error);
+      setError(error.message || '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }

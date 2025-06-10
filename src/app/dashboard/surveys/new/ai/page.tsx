@@ -11,7 +11,6 @@ import {
   CheckCircle,
   Loader2,
   Edit,
-  Eye,
   Save,
   RefreshCw,
 } from "lucide-react";
@@ -21,6 +20,17 @@ interface GeneratedQuestion {
   question_text: string;
   question_type: "text" | "rating" | "single_choice" | "multiple_choice";
   choices_text?: string[];
+  rating_min_label?: string;
+  rating_max_label?: string;
+}
+
+interface RequiredQuestion {
+  id: string;
+  question_text: string;
+  question_type: string;
+  options?: Record<string, unknown> | null;
+  order_num: number;
+  is_active: boolean;
   rating_min_label?: string;
   rating_max_label?: string;
 }
@@ -39,7 +49,7 @@ export default function AISurveyPage() {
   );
   const [generatedSurvey, setGeneratedSurvey] =
     useState<GeneratedSurvey | null>(null);
-  const [requiredQuestions, setRequiredQuestions] = useState<any[]>([]);
+  const [requiredQuestions, setRequiredQuestions] = useState<RequiredQuestion[]>([]);
   const [generating, setGenerating] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,10 +91,10 @@ export default function AISurveyPage() {
             .eq("required_questions.is_active", true);
 
         if (!requiredQuestionsError && userRequiredQuestions) {
-          const requiredQuestionsData = userRequiredQuestions
-            .map((urq: any) => urq.required_questions)
-            .filter((rq: any) => rq && rq.is_active)
-            .sort((a: any, b: any) => a.order_num - b.order_num);
+          const requiredQuestionsData = (userRequiredQuestions as { required_questions: RequiredQuestion }[])
+            .map((urq) => urq.required_questions)
+            .filter((rq): rq is RequiredQuestion => rq && rq.is_active)
+            .sort((a, b) => a.order_num - b.order_num);
 
           setRequiredQuestions(requiredQuestionsData);
           console.log("조회된 필수질문들:", requiredQuestionsData);
@@ -136,22 +146,23 @@ export default function AISurveyPage() {
       const data = await response.json();
       setGeneratedSurvey(data.survey);
       setEditedSurvey(data.survey);
-    } catch (err: any) {
-      console.error("Error generating survey:", err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Error generating survey:", error);
 
       let errorMessage = "AI 설문 생성에 실패했습니다: ";
 
       if (
-        err.message?.includes("과부하") ||
-        err.message?.includes("overloaded")
+        error.message?.includes("과부하") ||
+        error.message?.includes("overloaded")
       ) {
         errorMessage =
           "AI 서비스가 일시적으로 과부하 상태입니다. 1-2분 후 다시 시도해주세요.";
-      } else if (err.message?.includes("인증")) {
+      } else if (error.message?.includes("인증")) {
         errorMessage =
           "인증에 문제가 있습니다. 페이지를 새로고침하거나 다시 로그인해주세요.";
       } else {
-        errorMessage += err.message || "알 수 없는 오류";
+        errorMessage += error.message || "알 수 없는 오류";
       }
 
       setError(errorMessage);
@@ -259,13 +270,13 @@ export default function AISurveyPage() {
       console.log("생성된 설문 ID:", newSurveyId);
 
       // 3. 사용자가 활성화한 필수질문들 조회 및 추가
-      let allQuestionsToInsert: any[] = [];
+      let allQuestionsToInsert: Record<string, unknown>[] = [];
 
       // 필수질문들을 먼저 추가 (앞쪽에 배치) - 활성화된 것만
       if (requiredQuestions.length > 0) {
         const requiredQuestionData = requiredQuestions.map(
-          (rq: any, index: number) => {
-            const questionData: any = {
+          (rq: RequiredQuestion, index: number) => {
+            const questionData: Record<string, unknown> = {
               survey_id: newSurveyId,
               store_id: storeId, // store_id 추가
               question_text: rq.question_text,
@@ -294,7 +305,7 @@ export default function AISurveyPage() {
 
       // 4. AI가 생성한 질문들 추가 (필수질문 뒤에 배치)
       const aiQuestionsToInsert = editedSurvey.questions.map((q, index) => {
-        const questionData: any = {
+        const questionData: Record<string, unknown> = {
           survey_id: newSurveyId,
           store_id: storeId,
           question_text: q.question_text,
@@ -350,17 +361,21 @@ export default function AISurveyPage() {
       setTimeout(() => {
         router.push("/dashboard/surveys");
       }, 2000);
-    } catch (err: any) {
-      console.error("Error creating survey:", err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Error creating survey:", error);
       setError(
-        "설문 저장에 실패했습니다: " + (err.message || "알 수 없는 오류")
+        "설문 저장에 실패했습니다: " + (error.message || "알 수 없는 오류")
       );
     } finally {
       setCreating(false);
     }
   };
 
-  const updateSurveyField = (field: keyof GeneratedSurvey, value: any) => {
+  const updateSurveyField = (
+    field: keyof GeneratedSurvey,
+    value: unknown
+  ) => {
     if (!editedSurvey) return;
     setEditedSurvey({ ...editedSurvey, [field]: value });
   };
@@ -368,7 +383,7 @@ export default function AISurveyPage() {
   const updateQuestion = (
     index: number,
     field: keyof GeneratedQuestion,
-    value: any
+    value: unknown
   ) => {
     if (!editedSurvey) return;
     const updatedQuestions = [...editedSurvey.questions];
