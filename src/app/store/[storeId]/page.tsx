@@ -94,12 +94,7 @@ export default function StoreSurveyPage({ params }: Props) {
     setError(null); // Clear any previous errors
   };
 
-  const handleAnswerChange = (
-    questionId: string,
-    value: string | number,
-    questionType?: "select",
-    isMulti?: boolean
-  ) => {
+  const handleAnswerChange = (questionId: string, value: string | number) => {
     setError(null); // Clear error on new answer
 
     // 현재 질문 정보를 찾습니다.
@@ -395,12 +390,7 @@ export default function StoreSurveyPage({ params }: Props) {
                       key={opt}
                       type="button"
                       onClick={() =>
-                        handleAnswerChange(
-                          question.id,
-                          effectiveValue,
-                          "select",
-                          question.isMultiSelect
-                        )
+                        handleAnswerChange(question.id, effectiveValue)
                       }
                       className={`flex items-center justify-between w-full p-4 text-left border rounded-lg transition-colors duration-150 ease-in-out 
                         ${
