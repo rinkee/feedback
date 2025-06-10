@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-empty-interface, no-var */
+/* eslint-disable @typescript-eslint/no-empty-object-type, no-var */
 
 declare namespace JSX {
   interface IntrinsicElements {
