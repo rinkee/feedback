@@ -1,14 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { GoogleGenAI } from "@google/genai";
 
 export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+  request: Request,
+  { params }: { params: { id: string } } // 1. params에서 Promise 래핑 제거
+): Promise<Response> {
   try {
     console.log("=== AI Analysis API 시작 ===");
-    const { id: surveyId } = await params;
+    const surveyId = params.id; // 2. await 없이 params.id로 직접 접근
     console.log("1. Survey ID:", surveyId);
 
     // 임시로 인증 체크 우회하고 기존 사용자 ID 사용 (테스트용)

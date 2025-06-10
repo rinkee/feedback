@@ -311,14 +311,6 @@ export default function SurveysPage() {
               icon={BarChart3}
               title="첫 설문을 만들어보세요!"
               description="아직 생성된 설문이 없습니다. 새 설문을 만들어 고객 피드백 수집을 시작하세요."
-              action={
-                <Link
-                  href="/dashboard/surveys/new"
-                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
-                >
-                  <Plus size={16} className="mr-2" />새 설문 만들기
-                </Link>
-              }
               variant="default"
             />
           </div>
