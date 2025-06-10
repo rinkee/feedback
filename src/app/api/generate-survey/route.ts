@@ -32,7 +32,7 @@ interface GeneratedSurvey {
   questions: SurveyQuestion[];
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   try {
     // FIX 1: request.json()의 반환 타입을 명시적으로 지정하고 올바른 구조 분해 할당을 사용합니다.
     // 이렇게 하면 'description'이 string 타입임을 TypeScript가 알게 되어 오류가 해결됩니다.
@@ -43,14 +43,14 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "설문 설명이 필요합니다." },
         { status: 400 }
-      );
+      ) as Response;
     }
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
         { error: "Gemini API 키가 설정되지 않았습니다." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     // Authorization 헤더에서 토큰 추출
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "인증이 필요합니다." },
         { status: 401 }
-      );
+      ) as Response;
     }
 
     const token = authHeader.substring(7);
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "인증이 필요합니다." },
         { status: 401 }
-      );
+      ) as Response;
     }
 
     console.log("=== 인증된 사용자 정보 ===");
@@ -455,7 +455,7 @@ ${storeContext}
         return q;
       });
 
-      return NextResponse.json({ survey });
+      return NextResponse.json({ survey }) as Response;
     } catch (parseError) {
       console.error("JSON 파싱 오류:", parseError);
       console.error("원본 응답:", fullText);
@@ -463,7 +463,7 @@ ${storeContext}
       return NextResponse.json(
         { error: "AI 응답을 파싱하는 데 실패했습니다. 다시 시도해주세요." },
         { status: 500 }
-      );
+      ) as Response;
     }
   } catch (err: unknown) {
     const error = err as Error;
@@ -474,12 +474,12 @@ ${storeContext}
       return NextResponse.json(
         { error: "AI 서비스 연결에 실패했습니다. API 키를 확인해주세요." },
         { status: 500 }
-      );
+      ) as Response;
     }
 
     return NextResponse.json(
       { error: "설문 생성 중 오류가 발생했습니다. 다시 시도해주세요." },
       { status: 500 }
-    );
+    ) as Response;
   }
 }
