@@ -7,12 +7,12 @@ interface EmptyStateProps {
   variant?: "default" | "chart" | "card";
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({
+const EmptyState = ({
   icon: Icon,
   title,
   description,
-  variant = "default",
-}) => {
+  variant,
+}: EmptyStateProps) => {
   if (variant === "chart") {
     return (
       <div className="text-center py-12">

@@ -110,7 +110,9 @@ export async function POST(
       .eq("user_id", userId)
       .single();
 
-    let storeInfo = null;
+    // FIX 2: 'storeInfo'의 타입을 'StoreInfo | undefined'로 명시하고 'undefined'로 초기화합니다.
+    // 'null' 대신 'undefined'를 사용하여 함수 시그니처와 타입을 일치시킵니다.
+    let storeInfo: StoreInfo | undefined = undefined;
     if (storeData && !storeError) {
       storeInfo = {
         store_name: storeData.store_name,
@@ -178,7 +180,9 @@ export async function POST(
     console.log("15. 응답 데이터 그룹화...");
     const customerResponses = new Map();
 
-    responses.forEach((response) => {
+    // FIX 1: forEach 콜백의 'response' 매개변수에 명시적으로 'AIResponse' 타입을 지정합니다.
+    // 이렇게 하면 TypeScript가 'response' 객체의 속성을 알 수 있게 되어 'any' 타입 오류가 해결됩니다.
+    responses.forEach((response: AIResponse) => {
       const customerId = response.customer_info_id;
       if (!customerResponses.has(customerId)) {
         customerResponses.set(customerId, {
@@ -251,21 +255,18 @@ export async function POST(
     const error = err as Error;
     console.error("=== AI 분석 오류 ===", error);
     const message = error.message || "AI 분석 중 오류가 발생했습니다.";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-async function generateAIAnalysis(
-  data: {
-    survey: Record<string, unknown>;
-    questions: Array<{ question_text: string; question_type: string }>;
-    responses: AIResponse[];
-    storeInfo?: StoreInfo;
-  }
-) {
+// 이 아래 함수들은 수정할 필요가 없습니다.
+// ... (generateAIAnalysis, performGeminiAnalysis 함수는 그대로 유지)
+async function generateAIAnalysis(data: {
+  survey: Record<string, unknown>;
+  questions: Array<{ question_text: string; question_type: string }>;
+  responses: AIResponse[];
+  storeInfo?: StoreInfo;
+}) {
   console.log("AI 분석 함수 시작...");
 
   const { survey, questions, responses, storeInfo } = data;
@@ -430,8 +431,9 @@ ${
 
 ### 설문 질문들:
 ${questions
-  .map((q: { question_text: string; question_type: string }, i: number) =>
-    `${i + 1}. ${q.question_text} (유형: ${q.question_type})`
+  .map(
+    (q: { question_text: string; question_type: string }, i: number) =>
+      `${i + 1}. ${q.question_text} (유형: ${q.question_type})`
   )
   .join("\n")}
 
