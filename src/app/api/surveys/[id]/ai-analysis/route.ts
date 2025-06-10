@@ -37,13 +37,14 @@ interface StoreInfo {
 }
 
 export async function POST(
-  request: Request, // 1. NextRequest를 표준 Request로 변경
-  { params }: { params: { id: string } } // 2. params에서 Promise 제거
+  request: Request,
+  // 두 번째 인자의 타입을 명확히 지정합니다.
+  context: { params: { id: string } }
 ): Promise<Response> {
   // 3. 함수의 반환 타입을 명시
   try {
     console.log("=== AI Analysis API 시작 ===");
-    const surveyId = params.id;
+    const surveyId = context.params.id;
     console.log("1. Survey ID:", surveyId);
 
     // 임시로 인증 체크 우회하고 기존 사용자 ID 사용 (테스트용)
