@@ -35,11 +35,18 @@ interface StoreInfo {
   features?: string[];
   description?: string;
 }
+// FIX 1: 라우트 핸들러의 두 번째 인자를 위한 타입을 명시적으로 선언합니다.
+// 이것이 이 오류를 해결하는 가장 확실한 방법입니다.
+interface RouteContext {
+  params: {
+    id: string; // 동적 라우트의 [id] 부분과 이름이 일치해야 합니다.
+  };
+}
 
 export async function POST(
   request: Request,
   // 두 번째 인자의 타입을 명확히 지정합니다.
-  context: { params: { id: string } }
+  context: RouteContext // 위에서 선언한 타입을 사용합니다.
 ): Promise<Response> {
   // 3. 함수의 반환 타입을 명시
   try {
