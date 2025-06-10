@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 interface MenuItem {
