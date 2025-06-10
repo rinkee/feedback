@@ -38,7 +38,7 @@ interface Question {
   rating_min_label?: string;
   rating_max_label?: string;
   original_question_type?: string;
-  original_options?: any;
+  original_options?: Record<string, unknown>;
   required_question_category?: string;
 }
 
@@ -62,6 +62,40 @@ interface CustomerInfo {
   gender: string;
   phone?: string;
   email?: string;
+}
+
+interface DBOptions {
+  choices_text?: string[];
+  isMultiSelect?: boolean;
+  placeholder?: string;
+  maxRating?: number;
+  labels?: { [key: number]: string };
+  rating_min_label?: string;
+  rating_max_label?: string;
+  [key: string]: unknown;
+}
+
+interface DBQuestion {
+  id: string;
+  question_text: string;
+  question_type: string | null;
+  options?: DBOptions | null;
+  order_num: number;
+  is_required: boolean;
+  required_question_id?: string | null;
+  required_questions?: { category?: string | null } | null;
+}
+
+interface ResponseData {
+  survey_id: string;
+  question_id: string;
+  user_id: string;
+  customer_info_id: string;
+  required_question_category: string | null;
+  response_text?: string;
+  selected_option?: string;
+  selected_options?: string[];
+  rating?: number;
 }
 
 export default function SurveyViewPage() {
@@ -136,20 +170,6 @@ export default function SurveyViewPage() {
     return () => observer.disconnect();
   }, [survey]);
 
-  // 질문 유형별 아이콘 반환
-  const getQuestionIcon = (type: string) => {
-    switch (type) {
-      case "textarea":
-        return <MessageSquare className="h-5 w-5 text-blue-500" />;
-      case "rating":
-        return <Star className="h-5 w-5 text-yellow-500" />;
-      case "select":
-        return <CheckSquare className="h-5 w-5 text-green-500" />;
-      default:
-        return <Edit3 className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
   useEffect(() => {
     async function fetchSurveyData() {
       try {
@@ -208,7 +228,7 @@ export default function SurveyViewPage() {
         console.log("Questions data:", questionsData);
 
         // 질문 데이터 형식 변환
-        const formattedQuestions = questionsData.map((q): Question => {
+        const formattedQuestions = questionsData.map((q: DBQuestion): Question => {
           const dbQuestionType = q.question_type;
           let feQuestionType: Question["type"];
 
@@ -246,7 +266,7 @@ export default function SurveyViewPage() {
 
           // 필수질문 카테고리 확인 - 디버그 로그 추가
           const requiredQuestionCategory =
-            (q.required_questions as any)?.category || null;
+            q.required_questions?.category || null;
           console.log(
             `질문 "${q.question_text.substring(
               0,
@@ -280,7 +300,7 @@ export default function SurveyViewPage() {
               typeof dbQuestionType === "string"
                 ? dbQuestionType
                 : String(dbQuestionType), // Store original, ensure string
-            original_options: dbOptions,
+            original_options: dbOptions as Record<string, unknown>,
             required_question_category: requiredQuestionCategory,
           };
         });
@@ -291,9 +311,10 @@ export default function SurveyViewPage() {
           description: surveyData.description,
           questions: formattedQuestions,
         });
-      } catch (err: any) {
-        console.error("Fetch error:", err);
-        setError(err.message || "설문을 불러오는데 실패했습니다.");
+      } catch (err: unknown) {
+        const error = err as Error;
+        console.error("Fetch error:", error);
+        setError(error.message || "설문을 불러오는데 실패했습니다.");
       } finally {
         setLoading(false);
       }
@@ -311,7 +332,7 @@ export default function SurveyViewPage() {
   ) => {
     setAnswers((prevAnswers) => {
       const newAnswers = { ...prevAnswers };
-      let currentAnswerForQuestion: Answer = newAnswers[questionId]
+      const currentAnswerForQuestion: Answer = newAnswers[questionId]
         ? { ...newAnswers[questionId] }
         : { question_id: questionId };
 
@@ -479,7 +500,7 @@ export default function SurveyViewPage() {
           );
           const requiredQuestionCategory = question?.required_question_category;
 
-          const responseData: any = {
+          const responseData: ResponseData = {
             survey_id: surveyId,
             question_id: ans.question_id,
             user_id: userId,
@@ -523,10 +544,11 @@ export default function SurveyViewPage() {
 
       setShowCustomerInfoModal(false);
       setSubmitSuccess(true);
-    } catch (err: any) {
-      console.error("Submission error:", err);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Submission error:", error);
       setCustomerInfoError(
-        err.message || "제출 중 예기치 않은 오류가 발생했습니다."
+        error.message || "제출 중 예기치 않은 오류가 발생했습니다."
       );
     } finally {
       setSubmitting(false);

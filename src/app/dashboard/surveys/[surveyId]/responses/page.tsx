@@ -55,7 +55,7 @@ interface Question {
   id: string;
   question_text: string;
   question_type: string;
-  options?: any;
+  options?: Record<string, unknown>;
   order_num: number;
 }
 
@@ -75,7 +75,7 @@ interface ResponseData {
 interface AIStatistic {
   id: string;
   summary: string;
-  statistics: any;
+  statistics: Record<string, unknown>;
   recommendations: string;
   analysis_date: string;
   total_responses: number;
@@ -211,9 +211,10 @@ export default function SurveyResponsesPage() {
 
       // 6. 통계 계산
       calculateStats(filteredData, questionsData || []);
-    } catch (err: any) {
-      console.error("Error fetching survey data:", err);
-      setError(err.message || "데이터를 불러오는데 실패했습니다.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Error fetching survey data:", error);
+      setError(error.message || "데이터를 불러오는데 실패했습니다.");
     } finally {
       setLoading(false);
     }
@@ -230,7 +231,7 @@ export default function SurveyResponsesPage() {
           setLatestAiAnalysis(data.statistics[0]);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("AI 통계 조회 오류:", error);
     }
   };
@@ -283,7 +284,7 @@ export default function SurveyResponsesPage() {
         const errorData = await response.json();
         alert(`AI 분석 실패: ${errorData.error}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("AI 분석 오류:", error);
       alert("AI 분석 중 오류가 발생했습니다.");
     } finally {

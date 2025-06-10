@@ -89,9 +89,10 @@ export default function AuthPage() {
           }, 1000);
         }
       }
-    } catch (err: any) {
-      console.error("Auth error:", err);
-      setError(err.message || "오류가 발생했습니다. 다시 시도해주세요.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error("Auth error:", error);
+      setError(error.message || "오류가 발생했습니다. 다시 시도해주세요.");
     } finally {
       setLoading(false);
     }

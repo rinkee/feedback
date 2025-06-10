@@ -4,7 +4,6 @@ interface EmptyStateProps {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   description?: string;
-  action?: React.ReactNode;
   variant?: "default" | "chart" | "card";
 }
 
@@ -12,7 +11,6 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   icon: Icon,
   title,
   description,
-  action,
   variant = "default",
 }) => {
   if (variant === "chart") {
@@ -27,7 +25,6 @@ const EmptyState: React.FC<EmptyStateProps> = ({
             {description}
           </p>
         )}
-        {/* {action && action} */}
       </div>
     );
   }
@@ -44,7 +41,6 @@ const EmptyState: React.FC<EmptyStateProps> = ({
             {description}
           </p>
         )}
-        {/* {action && <div className="mt-4">{action}</div>} */}
       </div>
     );
   }
@@ -61,7 +57,6 @@ const EmptyState: React.FC<EmptyStateProps> = ({
           {description}
         </p>
       )}
-      {/* {action && action} */}
     </div>
   );
 };
