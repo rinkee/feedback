@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { type User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
+  import type { Session } from "@supabase/supabase-js";
+
+type SupabaseUser = Session["user"];
 
 export default function DashboardLayout({
   children,
